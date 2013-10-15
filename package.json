@@ -1,0 +1,27 @@
+{
+  "name": "Ryggrad",
+  "description": "Build Coffeescript MVC Apps",
+  "version": "0.0.1",
+  "keywords": ["ryggrad", "mvc", "framework"],
+  "version": "0.0.1",
+  "homepage": "http://ryggrad.github.io",
+  "author": {
+    "name": "K-2052",
+    "site": "http://twitter.com/k_2052" 
+  },
+  "dependencies": {
+    "grunt-lib-phantomjs": "~0.3",
+    "requirejs": "~2.1.4",
+    "sinon": "~1.6.0",
+    "chai": "~1.6.0",
+    "mocha": "~1.9.0"
+  },
+  "devDependencies": {
+    "grunt": "~0.4.1",
+    "grunt-cli": "~0.1.7",
+    "grunt-contrib-coffee": "~0.7.0",
+    "grunt-contrib-uglify": "~0.2.4",
+    "grunt-contrib-watch": "~0.5.3",
+    "grunt-mocha": "~0.4.1"
+  }
+}
