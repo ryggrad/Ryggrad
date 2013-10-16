@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "keywords": ["ryggrad", "mvc", "framework"],
   "version": "0.0.1",
+  "license": "MIT",
   "homepage": "http://ryggrad.github.io",
   "author": {
     "name": "K-2052",
