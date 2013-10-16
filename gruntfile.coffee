@@ -41,7 +41,7 @@ module.exports = (grunt) ->
         join: true
       src:
         files:
-          '<%= meta.endpoint %>/<%= meta.file %>.debug.js': '<%= resources.src %>'
+          '<%= meta.file %>.debug.js': '<%= resources.src %>'
       test:
         files:
           'test/js/ryggrad.js': '<%= resources.src %>'
@@ -53,7 +53,7 @@ module.exports = (grunt) ->
         compress: false
         banner: '<%= meta.banner %>'
       endpoint:
-        files: '<%=meta.endpoint%>/<%=meta.file%>.js':  '<%= meta.endpoint %>/<%= meta.file %>.debug.js'
+        files: '<%=meta.file%>.js':  '<%= meta.file %>.debug.js'
 
     watch:
       src:

@@ -8,8 +8,8 @@
     "type": "git",
     "url": "git://github.com/ryggrad/ryggrad.git"
   },
-  "version": "0.0.1",
-  "main": "package/ryggrad.js",
+  "version": "0.0.2",
+  "direct": true,
   "dependencies": {
     "jquery": "~2.0.3",
     "underscore": "~1.5.0"
