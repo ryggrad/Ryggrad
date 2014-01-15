@@ -1,4 +1,4 @@
-class Ryggrad.Util
+class Util
   # Get the current value of an input node.
   getInputValue: (el) ->
     if window.jQuery?

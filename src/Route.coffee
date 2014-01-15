@@ -3,9 +3,7 @@ namedParam   = /:([\w\d]+)/g
 splatParam   = /\*([\w\d]+)/g
 escapeRegExp = /[-[\]{}()+?.,\\^$|#\s]/g
 
-class Ryggrad.Route extends Ryggrad.Module
-  @extend Ryggrad.Events
-
+class Route extends Module
   @historySupport: window.history?.pushState?
   @routes: []
 
@@ -150,9 +148,9 @@ class Ryggrad.Route extends Ryggrad.Module
     @callback.call(null, options) isnt false
 
 # Coffee-script bug
-Ryggrad.Route.change = Ryggrad.Route.proxy(Ryggrad.Route.change)
+Route.change = Route.proxy(Route.change)
 
-Ryggrad.Controller.include
+Controller.include
   route: (path, callback) -> 
     Ryggrad.Route.add path, @proxy(callback)
 
