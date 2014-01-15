@@ -10,6 +10,8 @@ mobile.
 
 ## Credits
 
-The framework is 90% [Spine.js](https://github.com/spine/spine) with my hacks and modifications spread throughout.
+The framework is based on [Spine.js](https://github.com/spine/spine) and code pulled from the custom MVC framework in 
+[Monocle](https://github.com/maccman/monocle); both projects by [Alex MacCaw](https://github.com/maccman)
+
 The code for views based very heavily on [space-pen](https://github.com/atom/space-pen)
 Attribute tracking based on code from [Spine-Attribute-Events](https://github.com/mitchlloyd/Spine-Attribute-Events)
