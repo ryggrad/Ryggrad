@@ -63,3 +63,13 @@ isBlank = (value) ->
 
 makeArray = (args) ->
   Array::slice.call(args, 0)
+
+singularize = (str) ->
+  str.replace(/s$/, '')
+
+underscore = (str) ->
+  str.replace(/::/g, '/')
+     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+     .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+     .replace(/-/g, '_')
+     .toLowerCase()

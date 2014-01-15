@@ -1,2 +1,2 @@
-[ ]: Make compatible with Zepto
-[ ]: Docs and examples
+- [ ] Make compatible with Zepto
+- [ ] Docs and examples

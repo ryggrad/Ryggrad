@@ -1,4 +1,4 @@
-Events =
+ Events =
   bind: (ev, callback) ->
     evs = ev.split(' ')
 
@@ -86,7 +86,4 @@ Events =
     @
 
 # Exports
-Ryggrad.Events = Events
-
-# Global events
-Ryggrad.Module.extend.call(Ryggrad, Events)
+module.exports = Events

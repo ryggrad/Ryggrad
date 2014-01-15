@@ -35,4 +35,4 @@ AttributeTracking =
     @extend ClassMethods
 
 # Exports
-Ryggrad.AttributeTracking = AttributeTracking
+module.exports = AttributeTracking

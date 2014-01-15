@@ -1,5 +1,5 @@
 Queue  = $({})
-Model = Ryggrad.Model
+Model  = require('./Model')
 
 Ajax =
   getURL: (object) ->
@@ -248,4 +248,4 @@ Ajax.defaults   = Base::defaults
 Ajax.Base       = Base
 Ajax.Singleton  = Singleton
 Ajax.Collection = Collection
-Ryggrad.Ajax    = Ajax
+module.exports = Ajax

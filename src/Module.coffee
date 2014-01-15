@@ -1,6 +1,7 @@
+Events = require('./Events')
 moduleKeywords = ['included', 'extended']
 
-class Module
+class Module extends Events
   @include: (obj) ->
     throw new Error('include(obj) requires obj') unless obj
     for key, value of obj when key not in moduleKeywords
@@ -40,4 +41,4 @@ Module.create = (base, mixins...) ->
   return Mixed
 
 # Exports
-Ryggrad.Module = Module
+module.exports = Module

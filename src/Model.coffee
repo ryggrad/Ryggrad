@@ -1,5 +1,6 @@
-class Ryggrad.Model extends Ryggrad.Module
-  @extend Ryggrad.Events
+Module = require('./Module')
+
+class Model extends Module
   @records    : []
   @irecords   : {}
   @attributes : []
@@ -342,7 +343,9 @@ class Ryggrad.Model extends Ryggrad.Module
   toString: ->
     "<#{@constructor.className} (#{JSON.stringify(this)})>"
 
-Ryggrad.Model.setup = (name, attributes = []) ->
+Model.setup = (name, attributes = []) ->
   class Instance extends this
   Instance.configure(name, attributes...)
   Instance
+
+module.exports = Model
