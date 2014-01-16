@@ -29,17 +29,18 @@ module.exports = (grunt) ->
           'dist/<%= meta.file %>-debug.js': ['index.js']
         options:
           debug: true
-          # external: [require.resolve('jquery')]
+          standalone: 'Ryggrad'
       full:
         files:
           'dist/<%= meta.file %>-full.js': ['index.js']
         options:
           debug: false
-          # external: [require.resolve('jquery')]
+          standalone: 'Ryggrad'
       dist:
         files:
           'dist/<%= meta.file %>.js': ['index.js']
         options:
+          standalone: 'Ryggrad'
           external: [require.resolve('jquery'), require.resolve('underscore')]
 
     coffee:
