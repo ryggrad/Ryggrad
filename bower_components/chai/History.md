@@ -1,58 +1,4 @@
 
-1.8.0 / 2013-09-18 
-==================
-
- * test: [sauce] add a few more browsers
- * Merge branch 'refactor/deep-equal'
- * util: remove embedded deep equal utility
- * util: replace embedded deep equal with external module
- * Merge branch 'feature/karma'
- * docs: add sauce badge to readme [ci skip]
- * test: [sauce] use karma@canary to prevent timeouts
- * travis: only run on node 0.10
- * test: [karma] use karma phantomjs runner
- * Merge pull request #181 from tricknotes/fix-highlight
- * Fix highlight for example code
-
-1.7.2 / 2013-06-27 
-==================
-
-  * coverage: add coveralls badge
-  * test: [coveralls] add coveralls api integration. testing travis-ci integration
-  * Merge branch 'master' of github.com:chaijs/chai
-  * Merge branch 'feature/bower'
-  * Merge pull request #180 from tricknotes/modify-method-title
-  * Merge pull request #179 from tricknotes/highlight-code-example
-  * Modify method title to include argument name
-  * Fix to highlight code example
-  * bower: granular ignores
-
-1.7.1 / 2013-06-24 
-==================
-
-  * Merge branch 'feature/bower'. #175
-  * bower: add json file
-  * build: browser
-
-1.7.0 / 2013-06-17 
-==================
-
-  * error: remove internal assertion error constructor
-  * core: [assertion-error] replace internal assertion error with dep
-  * deps: add chaijs/assertion-error@1.0.0
-  * docs: fix typo in source file. #174
-  * Merge pull request #174 from piecioshka/master
-  * typo
-  * Merge branch 'master' of github.com:chaijs/chai
-  * pkg: lock mocha/mocha-phantomjs versions (for now)
-  * Merge pull request #173 from chaijs/inspect-fix
-  * Fix `utils.inspect` with custom object-returning inspect()s.
-  * Merge pull request #171 from Bartvds/master
-  * replaced tabs with 2 spaces
-  * added assert.notOk()
-  * Merge pull request #169 from katsgeorgeek/topics/master
-  * Fix comparison objects.
-
 1.6.1 / 2013-06-05 
 ==================
 
@@ -62,7 +8,7 @@
   * Downgrade mocha version for fix running Phantom tests.
   * Fix comparison equality of two regexps.
   * Merge pull request #161 from brandonpayton/master
-  * Fix documented name for assert interfaces isDefined method
+  * Fix documented name for assert interface's isDefined method
 
 1.6.0 / 2013-04-29 
 ==================

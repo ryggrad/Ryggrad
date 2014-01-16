@@ -1,351 +1,258 @@
-Module = require('./Module')
+$          = jQuery
+Module     = require('./Module')
+Collection = require('./Collection')
+AttributeTracking = require('./AttributeTracking')
+
+eql = (a, b) ->
+  a is b or JSON.stringify(a) is JSON.stringify(b)
 
 class Model extends Module
-  @records    : []
-  @irecords   : {}
-  @attributes : []
+  @extend AttributeTracking
 
-  @configure: (name, attributes...) ->
-    @className = name
-    @deleteAll()
-    @attributes = attributes if attributes.length
-    @attributes and= makeArray(@attributes)
-    @attributes or= []
+  @key: (name, options = {}) ->
+    unless @hasOwnProperty('attributes')
+      @attributes = {}
+    @attributes[name] = options
 
-    @unbind()
-    @
+  @records: ->
+    unless @hasOwnProperty('collection')
+      @collection = new Collection(
+        model: this,
+        name: 'base'
+        comparator: @comparator
+      )
+    @collection
 
-  @toString: -> "#{@className}(#{@attributes.join(", ")})"
+  @all: (callback) ->
+    @records().all(callback)
 
-  # Class Methods
-  @create: (atts, options) ->
-    record = new @(atts)
-    record.save(options)
+  @find: (id, options = {}) ->
+    @records().find(id, options)
+
+  @findBy: (callback, request) ->
+    @records().findBy(callback, request)
+
+  @filter: (callback) ->
+    @records().filter(callback)
+
+  @add: (values) ->
+    @records().add(values)
 
   @exists: (id) ->
-    @irecords[id]?.clone()
+    @records().exists(id)
 
-  @find: (id) ->
-    record = @exists(id)
-    throw new Error("\"#{@className}\" model could not find a record for the ID \"#{id}\"") unless record
-    return record
+  @uri: (parts...) ->
+    url = @url?() or @url
+    [url, parts...].join('/')
 
-  @update: (id, atts, options) ->
-    @find(id).updateAttributes(atts, options)
+  @url: (value) ->
+    @url = (-> value) if value
+    value or "/#{@name.toLowerCase()}"
 
-  @destroy: (id, options) ->
-    @find(id).destroy(options)
+  @toString: -> @name
 
-  @fetch: (callbackOrParams) ->
-    if typeof callbackOrParams is 'function'
-      @bind('fetch', callbackOrParams)
-    else
-      @trigger('fetch', arguments...)
-
-  @change: (callbackOrParams) ->
-    if typeof callbackOrParams is 'function'
-      @bind('change', callbackOrParams)
-    else
-      @trigger('change', arguments...)
-
-  @addRecord: (record) ->
-    if record.id and @irecords[record.id]
-      @irecords[record.id].remove()
-
-    record.id or= record.uid
-    @records.push(record)
-    @irecords[record.id]  = record
-    @irecords[record.uid] = record
-
-  @deleteAll: ->
-    @records  = []
-    @irecords = {}
-
-  @refresh: (values, options = {}) ->
-    @deleteAll() if options.clear
-
-    records = @fromJSON(values)
-    records = [records] unless isArray(records)
-    @addRecord(record) for record in records
-    @sort()
-
-    result = @cloneArray(records)
-    @trigger('refresh', result, options)
-    result
-
-  @toJSON: ->
-    @records
-
-  @fromJSON: (objects) ->
-    return unless objects
-    if typeof objects is 'string'
-      objects = JSON.parse(objects)
-    if isArray(objects)
-      (new @(value) for value in objects)
-    else
-      new @(objects)
-
-  @sort: ->
-    if @comparator
-      @records.sort @comparator
-
-    @
-
-  @findBy: (name, value) ->
-    for record in @records
-      if record[name] is value
-        return record.clone()
-    null
-
-  @findAllBy: (name, value) ->
-    @select (item) ->
-      item[name] is value
-
-  @select: (callback) ->
-    (record.clone() for record in @records when callback(record))
-
-  @each: (callback) ->
-    callback(record.clone()) for record in @records
-
-  @all: ->
-    @cloneArray(@records)
-
-  @first: ->
-    @records[0]?.clone()
-
-  @last: ->
-    @records[@records.length - 1]?.clone()
-
-  @count: ->
-    @records.length
-
-  @recordsValues: ->
-    result = []
-    result.push(value) for key, value of @records
-    result
-
-  @destroyAll: (options) ->
-    record.destroy(options) for record in @records
+  @on: (event, callback) ->
+    @records().on("record.#{event}", callback)
 
   # Private
-  @cloneArray: (array) ->
-    (value.clone() for value in array)
 
-  @idCounter: 0
+  @uidCounter: 0
 
   @uid: (prefix = '') ->
-    uid = prefix + @idCounter++
+    uid = prefix + @uidCounter++
     uid = @uid(prefix) if @exists(uid)
     uid
 
-  # Instance Methods
-  constructor: (attributes) ->
-    super
-    @className = @constructor.name
-    @load attributes if attributes
-    @uid = atts?.uid or @constructor.uid("uid-")
+  # Public
 
-  isNew: ->
-    not @exists()
+  constructor: (atts = {}) ->
+    if atts instanceof @constructor
+      return atts
 
-  isValid: ->
-    not @validate()
+    if Array.isArray(atts) or atts?.isArray
+      return(new @constructor(rec) for rec in atts)
 
-  validate: ->
+    @cid        = @constructor.uid('c-')
+    @attributes = {}
+    @promise    = $.Deferred().resolve(this)
 
-  load: (atts) ->
-    if atts.id then @id = atts.id
-    for key, value of atts
-      if atts.hasOwnProperty(key) and typeof @[key] is 'function'
-        @[key](value)
+    @set(atts) if atts
+    @init(arguments...)
+    this
+
+  init: ->
+
+  resolve: (callback) =>
+    @promise.done(callback)
+
+  get: (key) =>
+    if typeof @[key] is 'function'
+      @[key]()
+    else
+      @attributes[key]
+
+  set: (key, val) =>
+    # Pass in promise
+    if typeof key?.done is 'function'
+      key.done @set
+      return key
+
+    if typeof key?.attributes is 'object'
+      attrs = key.attributes
+    else if typeof key is 'object'
+      attrs = key
+    else if key
+      (attrs = {})[key] = val
+
+    changes = []
+
+    for attr, value of (attrs or {})
+      if typeof value?.done is 'function'
+        value.done (newValue) =>
+          @set(attr, newValue)
+        continue
+
+      previous = @get(attr)
+      continue if eql(previous, value)
+
+      if typeof @[attr] is 'function'
+        @[attr](value)
       else
-        @[key] = value
+        @attributes[attr] = value
 
-    @
+      changes.push change =
+        name: attr,
+        type: 'updated',
+        previous: previous
+        object: this,
+        value: value
 
-  attributes: ->
-    result = {}
-    for key in @constructor.attributes when key of this
-      if typeof @[key] is 'function'
-        result[key] = @[key]()
-      else
-        result[key] = @[key]
-    result.id = @id if @id
-    result
+      @trigger "observe.#{attr}", [change]
+
+    if changes.length
+      @trigger 'observe', changes
+
+    attrs
+
+  getID:  -> @get('id')
+  getCID: -> @cid
+
+  increment: (attr, amount = 1) ->
+    value = @get(attr) or 0
+    @set(attr, value + amount)
 
   eql: (rec) ->
-    !!(rec and rec.constructor is @constructor and
-        ((rec.uid is @uid) or (rec.id and rec.id is @id)))
+    return false unless rec
+    return false unless rec.constructor is @constructor
+    return true if rec.cid is @cid
+    return true if rec.get?('id') and rec.get('id') is @get('id')
+    false
 
-  save: (options = {}) ->
-    unless options.validate is false
-      error = @validate()
-      if error
-        @trigger('error', error)
-        return false
-
-    @trigger('beforeSave', options)
-    record = if @isNew() then @create(options) else @update(options)
-    @stripCloneAttrs()
-    @trigger('save', options)
-    record
-
-  stripCloneAttrs: ->
-    return if @hasOwnProperty 'uid' # Make sure it's not the raw object
-    for own key, value of @
-      delete @[key] if @constructor.attributes.indexOf(key) > -1
-    @
-
-  updateAttribute: (name, value, options) ->
-    atts = {}
-    atts[name] = value
-    @updateAttributes(atts, options)
-
-  updateAttributes: (atts, options) ->
-    @load(atts)
-    @save(options)
-
-  changeID: (id) ->
-    return if id is @id
-    records = @constructor.irecords
-    records[id] = records[@id]
-    delete records[@id]
-    @id = id
-    @save()
-
-  changeUID: (uid) ->
-    records = @constructor.irecords
-    records[uid] = records[@uid]
-    delete records[@uid]
-    @uid = uid
-    @save()
-
-  remove: ->
-    # Remove record from model
-    records = @constructor.records.slice(0)
-    for record, i in records when @eql(record)
-      records.splice(i, 1)
-      break
-    @constructor.records = records
-
-    # Remove the ID and UID
-    delete @constructor.irecords[@id]
-    delete @constructor.irecords[@uid]
-
-  destroy: (options = {}) ->
-    @trigger('beforeDestroy', options)
-    @remove()
-    @destroyed = true
-    # handle events
-    @trigger('destroy', options)
-    @trigger('change', 'destroy', options)
-    if @listeningTo
-      @stopListening()
-    @unbind()
-    this
-
-  dup: (newRecord = true) ->
-    atts = @attributes()
-    if newRecord
-      delete atts.id
-    else
-      atts.uid = @uid
-    new @constructor(atts)
-
-  clone: ->
-    Object.create(@)
+  fromForm: (form) ->
+    result = {}
+    for key in $(form).serializeArray()
+      result[key.name] = key.value
+    @set(result)
 
   reload: ->
-    return @ if @isNew()
-    original = @constructor.find(@id)
-    @load(original.attributes())
-    original
-
-  refresh: (data) ->
-    # go to the source and load attributes
-    root = @constructor.irecords[@id]
-    root.load(data)
-    @trigger('refresh')
-    @
+    @set(@setRequest $.getJSON(@uri()))
 
   exists: ->
-    @constructor.exists(@id)
+    @constructor.exists(this)
 
-  # Private
-  update: (options) ->
-    @trigger('beforeUpdate', options)
+  add: ->
+    @constructor.add(this)
 
-    records = @constructor.irecords
-    records[@id].load @attributes()
+  save: (attrs) =>
+    @set(attrs) if attrs
 
-    @constructor.sort()
+    isNew = not @exists()
+    type  = if isNew then 'POST' else 'PUT'
 
-    clone = records[@id].clone()
-    clone.trigger('update', options)
-    clone.trigger('change', 'update', options)
-    clone
+    @add()
 
-  create: (options) ->
-    @trigger('beforeCreate', options)
-    @id or= @uid
+    @setRequest @set $.ajax
+      type:  type
+      url:   @uri()
+      data:  @toJSON()
+      queue: true
+      warn:  true
 
-    record = @dup(false)
-    @constructor.addRecord(record)
-    @constructor.sort()
+    @trigger 'save'
+    @trigger if isNew then 'create' else 'update'
 
-    clone = record.clone()
-    clone.trigger('create', options)
-    clone.trigger('change', 'create', options)
-    clone
-
-  bind: (events, callback) ->
-    @constructor.bind events, binder = (record) =>
-      if record && @eql(record)
-        callback.apply(this, arguments)
-
-    # create a wrapper function to be called with 'unbind' for each event
-    for singleEvent in events.split(' ')
-      do (singleEvent) =>
-        @constructor.bind "unbind", unbinder = (record, event, cb) =>
-          if record && @eql(record)
-            return if event and event isnt singleEvent
-            return if cb and cb isnt callback
-            @constructor.unbind(singleEvent, binder)
-            @constructor.unbind("unbind", unbinder)
     this
 
-  one: (events, callback) ->
-    @bind events, handler = =>
-      @unbind(events, handler)
-      callback.apply(this, arguments)
+  bind: (key, callback) ->
+    if typeof key is 'function'
+      callback = key
+      key      = null
 
-  trigger: (args...) ->
-    args.splice(1, 0, this)
-    @constructor.trigger(args...)
+    callee = =>
+      if key
+        callback.call(this, @get(key), this)
+      else
+        callback.call(this, this)
 
-  listenTo: -> 
-    Ryggrad.Events.listenTo.apply @, arguments
-  listenToOnce: -> 
-    Ryggrad.Events.listenToOnce.apply @, arguments
-  stopListening: -> 
-    Ryggrad.Events.stopListening.apply @, arguments
+    if key
+      @observeKey(key, callee)
+    else
+      @observe(callee)
 
-  unbind: (events, callback) ->
-    if arguments.length is 0
-      @trigger('unbind')
-    else if events
-      for event in events.split(' ')
-        @trigger('unbind', event, callback)
+    do callee
 
-  toJSON: ->
-    @attributes()
+  change: (key, callback) ->
+    if typeof key is 'function'
+      callback = key
+      key      = null
 
-  toString: ->
-    "<#{@constructor.className} (#{JSON.stringify(this)})>"
+    if key
+      @observeKey key, =>
+        callback.call(this, @get(key), this)
+    else
+      @observe =>
+        callback.call(this, this)
 
-Model.setup = (name, attributes = []) ->
-  class Instance extends this
-  Instance.configure(name, attributes...)
-  Instance
+  observeKey: (key, callback) ->
+    @on("observe.#{key}", callback)
+
+  unobserveKey: (key, callback) ->
+    @off("observe.#{key}", callback)
+
+  observe: (callback) ->
+    @on('observe', callback)
+
+  unobserve: (callback) ->
+    @off('observe', callback)
+
+  uri: (parts...) =>
+    if id = @getID()
+      @constructor.uri(id, parts...)
+    else
+      @constructor.uri(parts...)
+
+  asJSON: (options = {}) =>
+    if options.all
+      attributes = @attributes
+    else
+      attributes = @constructor.attributes
+
+    result = {id: @getID()}
+    for key of attributes or {}
+      result[key] = @get(key)
+    result
+
+  toJSON: => @asJSON()
+
+  toString: =>
+    "<#{@constructor.name} (#{JSON.stringify(this)})>"
+
+  # Private
+
+  setRequest: (@request) =>
+    @promise = $.Deferred()
+    @request.done =>
+      @promise.resolve(this)
+    @request
 
 module.exports = Model

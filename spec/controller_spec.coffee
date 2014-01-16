@@ -4,7 +4,7 @@ describe "Controller", ->
 
   beforeEach ->
     class Tasks extends Ryggrad.Controller
-    element = $("<div />")
+      element = $("<div />")
 
   it "should be configurable", ->
     element.addClass "big"
@@ -36,19 +36,17 @@ describe "Controller", ->
 
     input[0].should.equal tasks.name[0]
 
-  # TODOD
-  # it "can remove element upon release event", ->
-  #   parent = $ "<div />"
-  #   parent.append element[0]
-  #   tasks = new Tasks(el: element)
-  # 
-  #   parent.children().length.should.equal 1
-  #   tasks.destroy()
-  #   parent.children().length.should.equal 0
+  it "can remove element upon release event", ->
+    parent = $ "<div />"
+    parent.append element[0]
+    tasks = new Tasks(el: element)
+  
+    parent.children().length.should.equal 1
+    tasks.destroy()
+    parent.children().length.should.equal 0
 
   describe "with spy", ->
     spy = undefined
-
 
     beforeEach ->
       spy = sinon.spy()

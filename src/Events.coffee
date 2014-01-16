@@ -1,89 +1,69 @@
- Events =
-  bind: (ev, callback) ->
-    evs = ev.split(' ')
+Events =
+  bind: (event, callback) ->
+    @on(event, callback)
 
-    calls = @hasOwnProperty('_callbacks') and @_callbacks or= {}
+  unbind: (event, callback) ->
+    @off(event, callback)
+    
+  on: (event, callback) ->
+    if typeof event isnt 'string'
+      throw new Error('event required')
 
-    for name in evs
+    if typeof callback isnt 'function'
+      throw new Error('callback required')
+
+    events = event.split(' ')
+    calls  = @hasOwnProperty('events') and @events or= {}
+
+    for name in events
       calls[name] or= []
       calls[name].push(callback)
+    this
 
-    @
+  isOn: (event, callback) ->
+    list = @hasOwnProperty('events') and @events?[event]
+    list and callback in list
+
+  one: (event, callback) ->
+    if typeof callback isnt 'function'
+      throw new Error('callback required')
+
+    callee = ->
+      @off(event, callee)
+      callback.apply(this, arguments)
+    @on(event, callee)
 
   trigger: (args...) ->
-    ev = args.shift()
+    event = args.shift()
+    list  = @hasOwnProperty('events') and @events?[event]
+    iargs = args.concat([this])
 
-    list = @hasOwnProperty('_callbacks') and @_callbacks?[ev]
-    return unless list
-
-    for callback in list
-      if callback.apply(@, args) is false
+    for callback in list or []
+      if callback.apply(this, iargs) is false
         break
+
+    unless event is 'all'
+      @trigger('all', event, args)
+
     true
-    
-  listenTo: (obj, ev, callback) ->
-    obj.bind(ev, callback)
-    @listeningTo or= []
-    @listeningTo.push {obj, ev, callback}
-    this
 
-  listenToOnce: (obj, ev, callback) ->
-    listeningToOnce = @listeningToOnce or = []
-    obj.bind ev, handler = ->
-      idx = -1
-      for lt, i in listeningToOnce when lt.obj is obj
-        idx = i if lt.ev is ev and lt.callback is callback
-      obj.unbind(ev, handler)
-      listeningToOnce.splice(idx, 1) unless idx is -1
-      callback.apply(this, arguments)
-    listeningToOnce.push {obj, ev, callback, handler}
-    this
+  off: (event, callback) ->
+    unless event
+      @events = {}
+      return this
 
-  stopListening: (obj, events, callback) ->
-    if arguments.length is 0
-      for listeningTo in [@listeningTo, @listeningToOnce]
-        continue unless listeningTo
-        for lt in listeningTo
-          lt.obj.unbind(lt.ev, lt.handler or lt.callback)
-      @listeningTo = undefined
-      @listeningToOnce = undefined
-
-    else if obj
-      for listeningTo in [@listeningTo, @listeningToOnce]
-        continue unless listeningTo
-        events = if events then events.split(' ') else [undefined]
-        for ev in events
-          for idx in [listeningTo.length-1..0]
-            lt = listeningTo[idx]
-            if (not ev) or (ev is lt.ev)
-              lt.obj.unbind(lt.ev, lt.handler or lt.callback)
-              listeningTo.splice(idx, 1) unless idx is -1
-            else if ev
-              evts = lt.ev.split(' ')
-              if ~(i = evts.indexOf(ev))
-                evts.splice(i, 1)
-                lt.ev = $.trim(evts.join(' '))
-                lt.obj.unbind(ev, lt.handler or lt.callback)
-
-  unbind: (ev, callback) ->
-    unless ev
-      @_callbacks = {}
-      return @
-
-    list = @_callbacks?[ev]
-    return @ unless list
+    list = @events?[event]
+    return this unless list
 
     unless callback
-      delete @_callbacks[ev]
-      return @
+      delete @events[event]
+      return this
 
     for cb, i in list when cb is callback
       list = list.slice()
       list.splice(i, 1)
-      @_callbacks[ev] = list
+      @events[event] = list
       break
+    this
 
-    @
-
-# Exports
 module.exports = Events

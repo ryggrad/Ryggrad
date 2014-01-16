@@ -9,7 +9,6 @@ describe "Ryggrad.Ajax", ->
     Ryggrad.Ajax.clearQueue()
     class User extends Ryggrad.Model
       @configure("User", "first", "last")
-      @extend Ryggrad.Model.Ajax
 
     jqXHR = $.Deferred()
 

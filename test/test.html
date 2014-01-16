@@ -10,14 +10,12 @@
     <div id="mocha"></div>
 
     <!-- mocha -->
-    <script src="../bower_components/jquery/jquery.js" type="text/javascript" charset="utf-8"></script>
-    <script src="../bower_components/underscore/underscore.js" type="text/javascript" charset="utf-8"></script>
+    <script src="../dist/ryggrad-full.js" type="text/javascript" charset="utf-8"></script>
     <script src="../bower_components/mocha/mocha.js" type="text/javascript" charset="utf-8"></script>
     <script type="text/javascript" charset="utf-8">
-        // This will be overridden by mocha-helper if you run with grunt
-        mocha.setup('bdd');
+      // This will be overridden by mocha-helper if you run with grunt
+      mocha.setup('bdd');
     </script>
-    <script src="js/ryggrad.js" type="text/javascript" charset="utf-8"></script>
 
     <!--
          IMPORTANT
@@ -33,9 +31,9 @@
     <script src="../bower_components/sinon-chai/lib/sinon-chai.js" type="text/javascript" charset="utf-8"></script>
     <script src="../bower_components/sinon/lib/sinon-1.7.3.js" type="text/javascript" charset="utf-8"></script>
     <script type="text/javascript" charset="utf-8">
-        // Setup chai
-        var expect = chai.expect;
-        chai.should();
+      // Setup chai
+      var expect = chai.expect;
+      chai.should();
     </script>
 
     <!-- Spec files -->
@@ -43,7 +41,7 @@
 
     <!-- run mocha -->
     <script type="text/javascript" charset="utf-8">
-        mocha.run();
+      mocha.run();
     </script>
 </body>
 </html>

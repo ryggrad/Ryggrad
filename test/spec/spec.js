@@ -17,9 +17,7 @@
           return _ref;
         }
 
-        Puppy.configure("Puppy", "name");
-
-        Puppy.extend(Ryggrad.AttributeTracking);
+        Puppy.key("name", String);
 
         return Puppy;
 
@@ -80,7 +78,7 @@
     element = void 0;
     beforeEach(function() {
       var _ref;
-      Tasks = (function(_super) {
+      return Tasks = (function(_super) {
         __extends(Tasks, _super);
 
         function Tasks() {
@@ -88,10 +86,11 @@
           return _ref;
         }
 
+        element = $("<div />");
+
         return Tasks;
 
       })(Ryggrad.Controller);
-      return element = $("<div />");
     });
     it("should be configurable", function() {
       var tasks;
@@ -136,6 +135,17 @@
         elements: elements
       });
       return input[0].should.equal(tasks.name[0]);
+    });
+    it("can remove element upon release event", function() {
+      var parent, tasks;
+      parent = $("<div />");
+      parent.append(element[0]);
+      tasks = new Tasks({
+        el: element
+      });
+      parent.children().length.should.equal(1);
+      tasks.destroy();
+      return parent.children().length.should.equal(0);
     });
     return describe("with spy", function() {
       var spy;

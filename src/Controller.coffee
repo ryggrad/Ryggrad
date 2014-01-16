@@ -1,6 +1,6 @@
-class Controller extends Ryggrad.Module
-  @include Ryggrad.Events
-  
+Module = require('./Module')
+
+class Controller extends Module  
   eventSplitter: /^(\S+)\s*(.*)$/
   tag: 'div'
 
@@ -50,5 +50,7 @@ class Controller extends Ryggrad.Module
 
   $: (selector) -> $(selector, @el)
 
+  release: =>
+
 # Exports
-Ryggrad.Controller = Controller
+module.exports = Controller

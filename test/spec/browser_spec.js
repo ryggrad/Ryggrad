@@ -21,8 +21,6 @@
 
         User.configure("User", "first", "last");
 
-        User.extend(Ryggrad.Model.Ajax);
-
         return User;
 
       })(Ryggrad.Model);

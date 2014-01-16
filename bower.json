@@ -4,11 +4,12 @@
   "homepage": "https://github.com/ryggrad/ryggrad",
   "keywords": ["mvc", "model", "view", "controller", "router", "server", "client", "browser"],
   "author": "K-2052 <k@2052.me>",
+  "main": "dist/ryggrad.js",
   "repository": {
     "type": "git",
     "url": "git://github.com/ryggrad/ryggrad.git"
   },
-  "version": "0.0.2",
+  "version": "0.0.5",
   "direct": true,
   "dependencies": {
     "jquery": "~2.0.3",

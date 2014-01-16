@@ -1,4 +1,4 @@
-class Util
+Util =
   # Get the current value of an input node.
   getInputValue: (el) ->
     if window.jQuery?
@@ -11,40 +11,26 @@ class Util
         when 'select-multiple' then o.value for o in el when o.selected
         else el.value
 
-jQuery = window.jQuery or window.Zepto
-$ = jQuery
+  isArray: (value) ->
+    Object::toString.call(value) is '[object Array]'
 
-$.fn.extend
-  hasEvent: (A, F, E) ->
-    L = 0
-    T = typeof A
-    V = false
-    E = (if E then E else this)
-    A = (if (T is "string") then $.trim(A) else A)
-    if T is "function"
-      F = A
-      A = null
-    F = null if F is E
-    S = E.data("events")
-    for e of S
-      L++  if S.hasOwnProperty(e)
-    return V = false  if L < 1
-    if A and not F
-      return V = S.hasOwnProperty(A)
-    else if A and S.hasOwnProperty(A) and F
-      $.each S[A], (i, r) ->
-        V = true  if V is false and r.handler is F
+  isBlank: (value) ->
+    return true unless value
+    return false for key of value
+    true
 
-      return V
-    else if not A and F
-      $.each S, (i, s) ->
-        if V is false
-          $.each s, (k, r) ->
-            V = true  if V is false and r.handler is F
+  makeArray: (args) ->
+    Array::slice.call(args, 0)
 
-    V
+  singularize: (str) ->
+    str.replace(/s$/, '')
 
-$.extend $.fn.hasEvent
+  underscore: (str) ->
+    str.replace(/::/g, '/')
+       .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+       .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+       .replace(/-/g, '_')
+       .toLowerCase()
 
 # Utilities & Shims
 unless typeof Object.create is 'function'
@@ -53,23 +39,4 @@ unless typeof Object.create is 'function'
     Func.prototype = o
     new Func()
 
-isArray = (value) ->
-  Object::toString.call(value) is '[object Array]'
-
-isBlank = (value) ->
-  return true unless value
-  return false for key of value
-  true
-
-makeArray = (args) ->
-  Array::slice.call(args, 0)
-
-singularize = (str) ->
-  str.replace(/s$/, '')
-
-underscore = (str) ->
-  str.replace(/::/g, '/')
-     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-     .replace(/([a-z\d])([A-Z])/g, '$1_$2')
-     .replace(/-/g, '_')
-     .toLowerCase()
+module.exports = Util

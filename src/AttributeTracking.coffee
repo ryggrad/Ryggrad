@@ -1,3 +1,5 @@
+_ = require('underscore')
+
 # This based on:
 #  https://github.com/mitchlloyd/Spine-Attribute-Events
 ClassMethods =

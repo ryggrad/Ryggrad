@@ -4,8 +4,7 @@ describe "Model Attribute Tracking", ->
 
   beforeEach ->
     class Puppy extends Ryggrad.Model
-      @configure("Puppy", "name")
-      @extend Ryggrad.AttributeTracking
+      @key "name", String
 
     spy = sinon.spy()
 
