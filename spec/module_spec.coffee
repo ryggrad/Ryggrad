@@ -19,18 +19,18 @@ describe "Module", ->
   it "can be extendable", ->
     User.extend classProperty: true
     User.classProperty.should.be.true
-
+  
   it "can be includable", ->
     User.include instanceProperty: true
     User::instanceProperty.should.be.true
     (new User()).instanceProperty.should.be.true
-
+  
   it "should trigger module callbacks", ->
     class module
       @included: ->
-
+  
       @extended: ->
-
+  
     spy = sinon.spy module, "included"
     User.include module
     spy.should.have.been.called
@@ -38,20 +38,21 @@ describe "Module", ->
     spy = sinon.spy module, "extended"
     User.extend module
     spy.should.have.been.called
-
+  
   it "include/extend should raise without arguments", ->
     expect(->
       User.include()
     ).to.throw(Error)
-
+  
     expect(->
       User.extend()
     ).to.throw(Error)
-
+  
   it "can proxy functions in class/instance context", ->
     func = ->
       this
-
+  
     User.proxy(func)().should.be User
     user = new User()
     user.proxy(func)().should.be user
+  

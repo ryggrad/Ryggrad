@@ -1,14 +1,12 @@
-Events = require('./Events')
 moduleKeywords = ['included', 'extended']
 
-class Module extends Events
+class Module
   @include: (obj) ->
     throw new Error('include(obj) requires obj') unless obj
     for key, value of obj when key not in moduleKeywords
       @::[key] = value
 
-    included = obj.included
-    included.apply(this) if included
+    obj.included?.apply(this)
     @
 
   @extend: (obj) ->

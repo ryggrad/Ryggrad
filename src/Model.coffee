@@ -1,27 +1,30 @@
 $          = jQuery
-Module     = require('./Module')
+Base       = require('./Base')
 Collection = require('./Collection')
-AttributeTracking = require('./AttributeTracking')
+_ = require('underscore')
+_.mixin(require('underscore.inflections'))
 
-eql = (a, b) ->
-  a is b or JSON.stringify(a) is JSON.stringify(b)
+eql = _.isEqual
 
-class Model extends Module
-  @extend AttributeTracking
-
+class Model extends Base
   @key: (name, options = {}) ->
     unless @hasOwnProperty('attributes')
       @attributes = {}
     @attributes[name] = options
 
+  @key 'id', String
+
   @records: ->
     unless @hasOwnProperty('collection')
       @collection = new Collection(
         model: this,
-        name: 'base'
+        name: 'base',
         comparator: @comparator
       )
     @collection
+
+  @count: ->
+    @records().count()
 
   @all: (callback) ->
     @records().all(callback)
@@ -47,7 +50,7 @@ class Model extends Module
 
   @url: (value) ->
     @url = (-> value) if value
-    value or "/#{@name.toLowerCase()}"
+    value or "/#{_.pluralize(@name.toLowerCase())}"
 
   @toString: -> @name
 
@@ -63,8 +66,23 @@ class Model extends Module
     uid = @uid(prefix) if @exists(uid)
     uid
 
-  # Public
+  @create: (atts = {}) ->
+    obj = new @(atts)
+    return obj.save()
 
+  @refresh: ->
+    @records().refresh(arguments...)
+
+  @destroy: (record) ->
+    @records().remove(record)
+
+  @destroyAll: ->
+    @records().reset()
+
+  @fetch: (options = {}) ->
+    @records().fetch(options)
+
+  # Public
   constructor: (atts = {}) ->
     if atts instanceof @constructor
       return atts
@@ -72,11 +90,12 @@ class Model extends Module
     if Array.isArray(atts) or atts?.isArray
       return(new @constructor(rec) for rec in atts)
 
-    @cid        = @constructor.uid('c-')
+    @cid  = @constructor.uid('c-')
     @attributes = {}
     @promise    = $.Deferred().resolve(this)
 
     @set(atts) if atts
+    @set('id', @cid) unless atts.id
     @init(arguments...)
     this
 
@@ -119,6 +138,7 @@ class Model extends Module
         @[attr](value)
       else
         @attributes[attr] = value
+        @[attr] = @attributes[attr]
 
       changes.push change =
         name: attr,
@@ -127,12 +147,16 @@ class Model extends Module
         object: this,
         value: value
 
-      @trigger "observe.#{attr}", [change]
+      @trigger "observe:#{attr}", [change]
+      @trigger "update:#{attr}" if change.type == 'updated' and previous
 
     if changes.length
       @trigger 'observe', changes
 
     attrs
+
+  updateAttribute: (attr, val) ->
+    @set(attr, val)
 
   getID:  -> @get('id')
   getCID: -> @cid
@@ -158,18 +182,16 @@ class Model extends Module
     @set(@setRequest $.getJSON(@uri()))
 
   exists: ->
-    @constructor.exists(this)
+    @constructor.exists(@getID())
 
   add: ->
     @constructor.add(this)
 
   save: (attrs) =>
     @set(attrs) if attrs
-
-    isNew = not @exists()
-    type  = if isNew then 'POST' else 'PUT'
-
-    @add()
+    
+    isNew = @isNew()
+    type = if isNew then 'POST' else 'PUT'
 
     @setRequest @set $.ajax
       type:  type
@@ -178,9 +200,23 @@ class Model extends Module
       queue: true
       warn:  true
 
+    @add()
+
     @trigger 'save'
     @trigger if isNew then 'create' else 'update'
 
+    this
+
+  destroy: ->
+    @constructor.destroy(@)
+
+    @setRequest @set $.ajax
+      type:  "DELETE"
+      url:  @uri(@getID()) 
+      queue: true
+      warn:  true
+
+    @trigger 'destroy'
     this
 
   bind: (key, callback) ->
@@ -207,17 +243,17 @@ class Model extends Module
       key      = null
 
     if key
-      @observeKey key, =>
+      @on "update:#{key}", =>
         callback.call(this, @get(key), this)
     else
       @observe =>
         callback.call(this, this)
 
   observeKey: (key, callback) ->
-    @on("observe.#{key}", callback)
+    @on("observe:#{key}", callback)
 
   unobserveKey: (key, callback) ->
-    @off("observe.#{key}", callback)
+    @off("observe:#{key}", callback)
 
   observe: (callback) ->
     @on('observe', callback)
@@ -225,11 +261,18 @@ class Model extends Module
   unobserve: (callback) ->
     @off('observe', callback)
 
+  isNew: ->
+    not @exists()
+
   uri: (parts...) =>
-    if id = @getID()
+    id = @getID()
+    if id and not @isNew() 
       @constructor.uri(id, parts...)
     else
       @constructor.uri(parts...)
+  
+  url: (parts...) =>
+    @uri(parts...)
 
   asJSON: (options = {}) =>
     if options.all
@@ -254,5 +297,13 @@ class Model extends Module
     @request.done =>
       @promise.resolve(this)
     @request
+   
+  fetch: (options = {}) ->
+    defaults =
+      request:
+        url: "#{@constructor.url()}/#{@get('id')}"
+     
+    options = $.extend(defaults, options)
+    @constructor.fetch(options)
 
 module.exports = Model

@@ -1,10 +1,12 @@
-Module = require('./Module')
+Base   = require('./Base')
+Router = require("./Router")
 
-class Controller extends Module  
+class Controller extends Base 
   eventSplitter: /^(\S+)\s*(.*)$/
   tag: 'div'
 
   constructor: (options) ->
+    @router = new Router()
     @options = options
 
     for key, value of @options
@@ -27,6 +29,15 @@ class Controller extends Module
     do @refreshElements if @elements
     super
 
+  route: (path, callback) -> 
+    @router.add path, @proxy(callback)
+
+  routes: (routes) ->
+    @route(key, value) for key, value of routes
+
+  url: -> 
+    @router.navigate.apply(router, args)  
+
   delegateEvents: ->
     for key, method of @events
       method = @proxy(@[method]) unless typeof(method) is 'function'
@@ -47,6 +58,7 @@ class Controller extends Module
     @trigger 'release'
     @el.addClass('garry')
     @unbind()
+    @el.remove()
 
   $: (selector) -> $(selector, @el)
 

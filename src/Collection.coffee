@@ -1,7 +1,7 @@
-$       = jQuery
-Module  = require('./Module')
+$    = jQuery
+Base = require('./Base')
 
-class Collection extends Module
+class Collection extends Base
   constructor: (options = {}) ->
     unless options.model
       throw new Error('Model required')
@@ -9,6 +9,7 @@ class Collection extends Module
     @ids               = {}
     @cids              = {}
     @records           = options.records or []
+    @name              = options.name or 'base'
     @model             = options.model
     @comparator        = options.comparator if options.comparator
 
@@ -22,6 +23,12 @@ class Collection extends Module
 
     if 'find' of options
       @asyncFindRequest = options.find
+
+  count: =>
+    @records.length
+
+  filter: (callback) =>
+    @records.filter(callback)
 
   find: (id, options = {}) =>
     unless id
@@ -39,10 +46,14 @@ class Collection extends Module
       @asyncFind(id, options)
 
   findBy: (callback, request) =>
-    unless typeof callback is 'function'
-      throw new Error('callback function required')
+    if typeof callback is 'string'
+      filter = (r) -> r.get(callback) is request
+      @syncFindBy(filter)
+    else
+      unless typeof callback is 'function'
+        throw new Error('callback function required')
 
-    @syncFindBy(callback) or @asyncFindBy(request)
+      @syncFindBy(callback) or @asyncFindBy(request)
 
   refresh: (options = {}) =>
     @reset()
@@ -61,6 +72,24 @@ class Collection extends Module
     @promise.done(callback) if callback
 
     result
+
+  syncFindBy: (callback) =>
+    @records.filter(callback)[0]
+
+  reset: =>
+    @remove(@records)
+
+    @ids  = {}
+    @cids = {}
+
+    @trigger('reset',)
+    @trigger('observe', [])
+
+  observe: (callback) =>
+    @on('observe', callback)
+
+  unobserve: (callback) =>
+    @off('observe', callback)
 
   fetch: (options = {}) =>
     @asyncAll(options).request
@@ -144,6 +173,15 @@ class Collection extends Module
     @trigger('observe', changes)
     records
 
+  syncFind: (id) =>
+    @ids[id] or @cids[id]
+
+  baseSyncFind: (id) =>
+    unless @isBase()
+      record = @model.collection?.syncFind(id)
+      @add(record) if record and not @exists(record)
+      record
+
   remove: (records) =>
     unless $.isArray(records)
       records = [records]
@@ -160,23 +198,6 @@ class Collection extends Module
       index = @records.indexOf(record)
       @records.splice(index, 1)
 
-  reset: =>
-    @remove(@records)
-
-    @ids  = {}
-    @cids = {}
-
-    @trigger('reset',)
-    @trigger('observe', [])
-
-  observe: (callback) =>
-    @on('observe', callback)
-
-  unobserve: (callback) =>
-    @off('observe', callback)
-
-  # Protected
-
   comparator: (a, b) ->
     if a > b
       return 1
@@ -185,43 +206,18 @@ class Collection extends Module
     else
       return 0
 
-  recordEvent: (event, args, record) =>
-    @trigger("record.#{event}", record, args)
-
   shouldPreload: =>
     @empty() and !@request
-
-  isBase: =>
-    @model.collection is this
-
-  asyncAll: (options = {}) =>
-    return unless @asyncAllRequest and @model.uri()
-
-    @request = @asyncAllRequest.call(@model, @model, options.request)
-    @records.request = @request
-    @records.promise = @promise = $.Deferred()
-    @request.done (result) =>
-      @add(result)
-      @promise.resolve(@records)
-    @records
 
   syncFindBy: (callback) =>
     @records.filter(callback)[0]
 
-  asyncFindBy: (asyncRequest) =>
-    return unless asyncRequest and @model.uri()
+  recordEvent: (event, args, record) =>
+    @trigger("record.#{event}", record, args)
 
-    record         = new @model
-    request        = asyncRequest.call(@model, record)
-    record.request = request
-    record.promise = $.Deferred()
-
-    request.done (response) =>
-      record.set(response)
-      record.promise.resolve(record)
-      @add(record)
-
-    record
+  isBase: =>
+    return true if @name is 'base'
+    @model.collection is this
 
   asyncFind: (id, options = {}) =>
     return unless @asyncFindRequest and @model.uri()
@@ -238,14 +234,31 @@ class Collection extends Module
 
     record
 
-  syncFind: (id) =>
-    @ids[id] or @cids[id]
+  asyncAll: (options = {}) =>
+    return unless @asyncAllRequest and @model.uri()
 
-  baseSyncFind: (id) =>
-    unless @isBase()
-      record = @model.collection?.syncFind(id)
-      @add(record) if record and not @exists(record)
-      record
+    @request = @asyncAllRequest.call(@model, @model, options.request)
+    @records.request = @request
+    @records.promise = @promise = $.Deferred()
+    @request.done (result) =>
+      @add(result)
+      @promise.resolve(@records)
+    @records
+
+  asyncFindBy: (asyncRequest) =>
+    return unless asyncRequest and @model.uri()
+
+    record         = new @model
+    request        = asyncRequest.call(@model, record)
+    record.request = request
+    record.promise = $.Deferred()
+
+    request.done (response) =>
+      record.set(response)
+      record.promise.resolve(record)
+      @add(record)
+
+    record
 
   asyncAllRequest: (model, options = {}) =>
     defaults =

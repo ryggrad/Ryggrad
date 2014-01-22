@@ -1,4 +1,4 @@
-Events =
+Events = 
   bind: (event, callback) ->
     @on(event, callback)
 
@@ -36,6 +36,7 @@ Events =
   trigger: (args...) ->
     event = args.shift()
     list  = @hasOwnProperty('events') and @events?[event]
+    return unless list
     iargs = args.concat([this])
 
     for callback in list or []
