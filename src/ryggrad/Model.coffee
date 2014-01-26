@@ -18,8 +18,7 @@ class Model extends Base
     unless @hasOwnProperty('collection')
       @collection = new Collection(
         model: this,
-        name: 'base',
-        comparator: @comparator
+        name: 'base'
       )
     @collection
 
@@ -84,6 +83,7 @@ class Model extends Base
 
   # Public
   constructor: (atts = {}) ->
+    console.log 'twice? wtf atts: ', atts 
     if atts instanceof @constructor
       return atts
 
@@ -191,15 +191,6 @@ class Model extends Base
     @set(attrs) if attrs
     
     isNew = @isNew()
-    type = if isNew then 'POST' else 'PUT'
-
-    @setRequest @set $.ajax
-      type:  type
-      url:   @uri()
-      data:  @toJSON()
-      queue: true
-      warn:  true
-
     @add()
 
     @trigger 'save'
@@ -209,12 +200,6 @@ class Model extends Base
 
   destroy: ->
     @constructor.destroy(@)
-
-    @setRequest @set $.ajax
-      type:  "DELETE"
-      url:  @uri(@getID()) 
-      queue: true
-      warn:  true
 
     @trigger 'destroy'
     this
@@ -270,7 +255,7 @@ class Model extends Base
       @constructor.uri(id, parts...)
     else
       @constructor.uri(parts...)
-  
+
   url: (parts...) =>
     @uri(parts...)
 
@@ -290,14 +275,6 @@ class Model extends Base
   toString: =>
     "<#{@constructor.name} (#{JSON.stringify(this)})>"
 
-  # Private
-
-  setRequest: (@request) =>
-    @promise = $.Deferred()
-    @request.done =>
-      @promise.resolve(this)
-    @request
-   
   fetch: (options = {}) ->
     defaults =
       request:

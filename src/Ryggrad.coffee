@@ -1,18 +1,18 @@
 jquery = require('jquery')
-require('./jqueryExtensions')(window)
-require('./jqueryAjax')(window)
+require('./ryggrad/jquery/extensions')(window)
+require('./ryggrad/jquery/ajax')(window)
 
 Ryggrad = {}
-Ryggrad.Base       = require('./Base')
-Ryggrad.Events     = require('./Events')
-Ryggrad.Module     = require('./Module')
-Ryggrad.Collection = require('./Collection')
-Ryggrad.Model      = require('./Model')
+Ryggrad.Base       = require('./ryggrad/Base')
+Ryggrad.Events     = require('./ryggrad/Events')
+Ryggrad.Module     = require('./ryggrad/Module')
+Ryggrad.Collection = require('./ryggrad/Collection')
+Ryggrad.Model      = require('./ryggrad/Model')
 Ryggrad.View       = require('space-pen').View
-Ryggrad.Controller = require('./Controller') 
-Ryggrad.Route      = require('./Route') 
-Ryggrad.Router     = require('./Router') 
-Ryggrad.Util       = require('./Util') 
+Ryggrad.Controller = require('./ryggrad/Controller') 
+Ryggrad.Route      = require('./ryggrad/Route') 
+Ryggrad.Router     = require('./ryggrad/Router') 
+Ryggrad.Util       = require('./ryggrad/Util') 
 
 # Exports
 Ryggrad.version = "0.0.5"

@@ -1,7 +1,42 @@
 !function(e){if("object"==typeof exports)module.exports=e();else if("function"==typeof define&&define.amd)define(e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.Ryggrad=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 module.exports = require('./lib/Ryggrad.js');
 
-},{"./lib/Ryggrad.js":10}],2:[function(require,module,exports){
+},{"./lib/Ryggrad.js":2}],2:[function(require,module,exports){
+var Ryggrad, jquery;
+
+jquery = require('jquery');
+
+require('./ryggrad/jquery/extensions')(window);
+
+require('./ryggrad/jquery/ajax')(window);
+
+Ryggrad = {};
+
+Ryggrad.Base = require('./ryggrad/Base');
+
+Ryggrad.Events = require('./ryggrad/Events');
+
+Ryggrad.Module = require('./ryggrad/Module');
+
+Ryggrad.Collection = require('./ryggrad/Collection');
+
+Ryggrad.Model = require('./ryggrad/Model');
+
+Ryggrad.View = require('space-pen').View;
+
+Ryggrad.Controller = require('./ryggrad/Controller');
+
+Ryggrad.Route = require('./ryggrad/Route');
+
+Ryggrad.Router = require('./ryggrad/Router');
+
+Ryggrad.Util = require('./ryggrad/Util');
+
+Ryggrad.version = "0.0.5";
+
+module.exports = Ryggrad;
+
+},{"./ryggrad/Base":3,"./ryggrad/Collection":4,"./ryggrad/Controller":5,"./ryggrad/Events":6,"./ryggrad/Model":7,"./ryggrad/Module":8,"./ryggrad/Route":9,"./ryggrad/Router":10,"./ryggrad/Util":11,"./ryggrad/jquery/ajax":12,"./ryggrad/jquery/extensions":13,"jquery":16,"space-pen":18}],3:[function(require,module,exports){
 var Base, Events, Module, _ref,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -28,8 +63,8 @@ Base = (function(_super) {
 
 module.exports = Base;
 
-},{"./Events":5,"./Module":7}],3:[function(require,module,exports){
-var $, Base, Collection,
+},{"./Events":6,"./Module":8}],4:[function(require,module,exports){
+var $, Ajax, Base, Collection,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -38,6 +73,8 @@ $ = jQuery;
 
 Base = require('./Base');
 
+Ajax = require('./storage/Ajax');
+
 Collection = (function(_super) {
   __extends(Collection, _super);
 
@@ -45,11 +82,6 @@ Collection = (function(_super) {
     if (options == null) {
       options = {};
     }
-    this.asyncFindRequest = __bind(this.asyncFindRequest, this);
-    this.asyncAllRequest = __bind(this.asyncAllRequest, this);
-    this.asyncFindBy = __bind(this.asyncFindBy, this);
-    this.asyncAll = __bind(this.asyncAll, this);
-    this.asyncFind = __bind(this.asyncFind, this);
     this.isBase = __bind(this.isBase, this);
     this.recordEvent = __bind(this.recordEvent, this);
     this.syncFindBy = __bind(this.syncFindBy, this);
@@ -89,12 +121,8 @@ Collection = (function(_super) {
     this.records.observe = this.observe;
     this.records.unobserve = this.unobserve;
     this.records.promise = this.promise;
-    if ('all' in options) {
-      this.asyncAllRequest = options.all;
-    }
-    if ('find' in options) {
-      this.asyncFindRequest = options.find;
-    }
+    this.options = options;
+    this.storage = options.storage || new Ajax(this);
   }
 
   Collection.prototype.count = function() {
@@ -121,7 +149,7 @@ Collection = (function(_super) {
     if (record && !options.remote) {
       return record;
     } else {
-      return this.asyncFind(id, options);
+      return this.storage.find(id, options);
     }
   };
 
@@ -131,12 +159,12 @@ Collection = (function(_super) {
       filter = function(r) {
         return r.get(callback) === request;
       };
-      return this.syncFindBy(filter);
+      return this.syncFindBy(filter) || this.storage.findBy(filter);
     } else {
       if (typeof callback !== 'function') {
         throw new Error('callback function required');
       }
-      return this.syncFindBy(callback) || this.asyncFindBy(request);
+      return this.syncFindBy(callback) || this.storage.findBy(callback);
     }
   };
 
@@ -158,7 +186,7 @@ Collection = (function(_super) {
       callback = null;
     }
     if (this.shouldPreload() || options.remote) {
-      result = this.asyncAll(options);
+      result = this.storage.all(options);
     } else {
       result = this.records;
     }
@@ -192,7 +220,7 @@ Collection = (function(_super) {
     if (options == null) {
       options = {};
     }
-    return this.asyncAll(options).request;
+    return this.storage.all(options).request;
   };
 
   Collection.prototype.each = function(callback) {
@@ -280,6 +308,7 @@ Collection = (function(_super) {
       });
     }
     this.sort();
+    this.storage.add(records);
     if (!this.isBase()) {
       this.model.add(records);
     }
@@ -304,6 +333,7 @@ Collection = (function(_super) {
 
   Collection.prototype.remove = function(records) {
     var index, record, _i, _len, _ref, _results;
+    this.storage.destroy(records);
     if (!$.isArray(records)) {
       records = [records];
     }
@@ -351,98 +381,13 @@ Collection = (function(_super) {
     return this.model.collection === this;
   };
 
-  Collection.prototype.asyncFind = function(id, options) {
-    var record, request,
-      _this = this;
-    if (options == null) {
-      options = {};
-    }
-    if (!(this.asyncFindRequest && this.model.uri())) {
-      return;
-    }
-    record = new this.model({
-      id: id
-    });
-    request = this.asyncFindRequest.call(this.model, record, options.request);
-    record.request = request;
-    record.promise = $.Deferred();
-    request.done(function(response) {
-      record.set(response);
-      record.promise.resolve(record);
-      return _this.add(record);
-    });
-    return record;
-  };
-
-  Collection.prototype.asyncAll = function(options) {
-    var _this = this;
-    if (options == null) {
-      options = {};
-    }
-    if (!(this.asyncAllRequest && this.model.uri())) {
-      return;
-    }
-    this.request = this.asyncAllRequest.call(this.model, this.model, options.request);
-    this.records.request = this.request;
-    this.records.promise = this.promise = $.Deferred();
-    this.request.done(function(result) {
-      _this.add(result);
-      return _this.promise.resolve(_this.records);
-    });
-    return this.records;
-  };
-
-  Collection.prototype.asyncFindBy = function(asyncRequest) {
-    var record, request,
-      _this = this;
-    if (!(asyncRequest && this.model.uri())) {
-      return;
-    }
-    record = new this.model;
-    request = asyncRequest.call(this.model, record);
-    record.request = request;
-    record.promise = $.Deferred();
-    request.done(function(response) {
-      record.set(response);
-      record.promise.resolve(record);
-      return _this.add(record);
-    });
-    return record;
-  };
-
-  Collection.prototype.asyncAllRequest = function(model, options) {
-    var defaults;
-    if (options == null) {
-      options = {};
-    }
-    defaults = {
-      url: model.uri(),
-      dataType: 'json',
-      type: 'GET'
-    };
-    return $.ajax($.extend(defaults, options));
-  };
-
-  Collection.prototype.asyncFindRequest = function(record, options) {
-    var defaults;
-    if (options == null) {
-      options = {};
-    }
-    defaults = {
-      url: record.uri(),
-      dataType: 'json',
-      type: 'GET'
-    };
-    return $.ajax($.extend(defaults, options));
-  };
-
   return Collection;
 
 })(Base);
 
 module.exports = Collection;
 
-},{"./Base":2}],4:[function(require,module,exports){
+},{"./Base":3,"./storage/Ajax":14}],5:[function(require,module,exports){
 var Base, Controller, Router,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
@@ -565,7 +510,7 @@ Controller = (function(_super) {
 
 module.exports = Controller;
 
-},{"./Base":2,"./Router":9}],5:[function(require,module,exports){
+},{"./Base":3,"./Router":10}],6:[function(require,module,exports){
 var Events,
   __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
   __slice = [].slice;
@@ -661,7 +606,7 @@ Events = {
 
 module.exports = Events;
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 var $, Base, Collection, Model, eql, _,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
@@ -699,8 +644,7 @@ Model = (function(_super) {
     if (!this.hasOwnProperty('collection')) {
       this.collection = new Collection({
         model: this,
-        name: 'base',
-        comparator: this.comparator
+        name: 'base'
       });
     }
     return this.collection;
@@ -809,7 +753,6 @@ Model = (function(_super) {
     if (atts == null) {
       atts = {};
     }
-    this.setRequest = __bind(this.setRequest, this);
     this.toString = __bind(this.toString, this);
     this.toJSON = __bind(this.toJSON, this);
     this.asJSON = __bind(this.asJSON, this);
@@ -819,6 +762,7 @@ Model = (function(_super) {
     this.set = __bind(this.set, this);
     this.get = __bind(this.get, this);
     this.resolve = __bind(this.resolve, this);
+    console.log('twice? wtf atts: ', atts);
     if (atts instanceof this.constructor) {
       return atts;
     }
@@ -973,19 +917,11 @@ Model = (function(_super) {
   };
 
   Model.prototype.save = function(attrs) {
-    var isNew, type;
+    var isNew;
     if (attrs) {
       this.set(attrs);
     }
     isNew = this.isNew();
-    type = isNew ? 'POST' : 'PUT';
-    this.setRequest(this.set($.ajax({
-      type: type,
-      url: this.uri(),
-      data: this.toJSON(),
-      queue: true,
-      warn: true
-    })));
     this.add();
     this.trigger('save');
     this.trigger(isNew ? 'create' : 'update');
@@ -994,12 +930,6 @@ Model = (function(_super) {
 
   Model.prototype.destroy = function() {
     this.constructor.destroy(this);
-    this.setRequest(this.set($.ajax({
-      type: "DELETE",
-      url: this.uri(this.getID()),
-      queue: true,
-      warn: true
-    })));
     this.trigger('destroy');
     return this;
   };
@@ -1107,16 +1037,6 @@ Model = (function(_super) {
     return "<" + this.constructor.name + " (" + (JSON.stringify(this)) + ")>";
   };
 
-  Model.prototype.setRequest = function(request) {
-    var _this = this;
-    this.request = request;
-    this.promise = $.Deferred();
-    this.request.done(function() {
-      return _this.promise.resolve(_this);
-    });
-    return this.request;
-  };
-
   Model.prototype.fetch = function(options) {
     var defaults;
     if (options == null) {
@@ -1137,7 +1057,7 @@ Model = (function(_super) {
 
 module.exports = Model;
 
-},{"./Base":2,"./Collection":3,"underscore":22,"underscore.inflections":20}],7:[function(require,module,exports){
+},{"./Base":3,"./Collection":4,"underscore":24,"underscore.inflections":22}],8:[function(require,module,exports){
 var Module, moduleKeywords,
   __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
   __slice = [].slice,
@@ -1242,7 +1162,7 @@ Module.create = function() {
 
 module.exports = Module;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 var Route, escapeRegExp, namedParam, splatParam;
 
 namedParam = /:([\w\d]+)/g;
@@ -1298,7 +1218,7 @@ Route = (function() {
 
 module.exports = Route;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 var Base, Controller, Module, Route, Router,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
@@ -1385,42 +1305,7 @@ Router = (function(_super) {
 
 module.exports = Router;
 
-},{"./Base":2,"./Controller":4,"./Module":7,"./Route":8}],10:[function(require,module,exports){
-var Ryggrad, jquery;
-
-jquery = require('jquery');
-
-require('./jqueryExtensions')(window);
-
-require('./jqueryAjax')(window);
-
-Ryggrad = {};
-
-Ryggrad.Base = require('./Base');
-
-Ryggrad.Events = require('./Events');
-
-Ryggrad.Module = require('./Module');
-
-Ryggrad.Collection = require('./Collection');
-
-Ryggrad.Model = require('./Model');
-
-Ryggrad.View = require('space-pen').View;
-
-Ryggrad.Controller = require('./Controller');
-
-Ryggrad.Route = require('./Route');
-
-Ryggrad.Router = require('./Router');
-
-Ryggrad.Util = require('./Util');
-
-Ryggrad.version = "0.0.5";
-
-module.exports = Ryggrad;
-
-},{"./Base":2,"./Collection":3,"./Controller":4,"./Events":5,"./Model":6,"./Module":7,"./Route":8,"./Router":9,"./Util":11,"./jqueryAjax":12,"./jqueryExtensions":13,"jquery":14,"space-pen":16}],11:[function(require,module,exports){
+},{"./Base":3,"./Controller":5,"./Module":8,"./Route":9}],11:[function(require,module,exports){
 var Util;
 
 Util = {
@@ -1625,7 +1510,226 @@ module.exports = function(window) {
   return $.extend($.fn.hasEvent);
 };
 
-},{"jquery":14}],14:[function(require,module,exports){
+},{"jquery":16}],14:[function(require,module,exports){
+var Ajax, Storage,
+  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  __slice = [].slice;
+
+Storage = require('./Storage');
+
+Ajax = (function(_super) {
+  __extends(Ajax, _super);
+
+  function Ajax() {
+    var args;
+    args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+    this.setRequest = __bind(this.setRequest, this);
+    this.findRequest = __bind(this.findRequest, this);
+    this.allRequest = __bind(this.allRequest, this);
+    this.find = __bind(this.find, this);
+    this.all = __bind(this.all, this);
+    Ajax.__super__.constructor.apply(this, args);
+    if ('all' in this.options) {
+      this.allRequest = this.options.all;
+    }
+    if ('find' in this.options) {
+      this.findRequest = this.options.find;
+    }
+  }
+
+  Ajax.prototype.add = function(records) {
+    var isNew, record, type, _i, _len, _results;
+    if (!$.isArray(records)) {
+      records = [records];
+    }
+    _results = [];
+    for (_i = 0, _len = records.length; _i < _len; _i++) {
+      record = records[_i];
+      isNew = record.isNew();
+      type = isNew ? 'POST' : 'PUT';
+      _results.push(this.setRequest(record.set($.ajax({
+        type: type,
+        url: record.uri(),
+        data: record.toJSON(),
+        queue: true,
+        warn: true
+      }))));
+    }
+    return _results;
+  };
+
+  Ajax.prototype.all = function(options) {
+    var _this = this;
+    if (options == null) {
+      options = {};
+    }
+    if (!(this.allRequest && this.model.uri())) {
+      return;
+    }
+    this.request = this.allRequest.call(this.model, this.model, options.request);
+    this.records.request = this.request;
+    this.records.promise = this.promise = $.Deferred();
+    this.request.done(function(result) {
+      _this.add(result);
+      return _this.promise.resolve(_this.records);
+    });
+    return this.records;
+  };
+
+  Ajax.prototype.find = function(id, options) {
+    var record, request,
+      _this = this;
+    if (options == null) {
+      options = {};
+    }
+    record = new this.model({
+      id: id
+    });
+    request = this.asyncFindRequest.call(this.model, record, options.request);
+    record.request = request;
+    record.promise = $.Deferred();
+    request.done(function(response) {
+      record.set(response);
+      record.promise.resolve(record);
+      return _this.add(record);
+    });
+    return record;
+  };
+
+  Ajax.prototype.findBy = function(ajaxRequest) {
+    var record, request,
+      _this = this;
+    record = new this.model;
+    request = ajaxRequest.call(this.model, record);
+    record.request = request;
+    record.promise = $.Deferred();
+    request.done(function(response) {
+      record.set(response);
+      record.promise.resolve(record);
+      return _this.add(record);
+    });
+    return record;
+  };
+
+  Ajax.prototype.save = function(records) {
+    var isNew, record, type, _i, _len, _results;
+    if (!$.isArray(records)) {
+      records = [records];
+    }
+    _results = [];
+    for (_i = 0, _len = records.length; _i < _len; _i++) {
+      record = records[_i];
+      isNew = record.isNew();
+      type = isNew ? 'POST' : 'PUT';
+      _results.push(this.setRequest(record.set($.ajax({
+        type: type,
+        url: record.uri(),
+        data: record.toJSON(),
+        queue: true,
+        warn: true
+      }))));
+    }
+    return _results;
+  };
+
+  Ajax.prototype.destroy = function(records) {
+    var record, _i, _len, _results;
+    if (!$.isArray(records)) {
+      records = [records];
+    }
+    _results = [];
+    for (_i = 0, _len = records.length; _i < _len; _i++) {
+      record = records[_i];
+      _results.push(this.setRequest(record.set($.ajax({
+        type: "DELETE",
+        url: record.uri(record.getID()),
+        queue: true,
+        warn: true
+      }))));
+    }
+    return _results;
+  };
+
+  Ajax.prototype.allRequest = function(model, options) {
+    var defaults;
+    if (options == null) {
+      options = {};
+    }
+    defaults = {
+      url: model.uri(),
+      dataType: 'json',
+      type: 'GET'
+    };
+    return $.ajax($.extend(defaults, options));
+  };
+
+  Ajax.prototype.findRequest = function(record, options) {
+    var defaults;
+    if (options == null) {
+      options = {};
+    }
+    defaults = {
+      url: record.uri(),
+      dataType: 'json',
+      type: 'GET'
+    };
+    return $.ajax($.extend(defaults, options));
+  };
+
+  Ajax.prototype.setRequest = function(request) {
+    var _this = this;
+    this.request = request;
+    this.promise = $.Deferred();
+    this.request.done(function() {
+      return _this.promise.resolve(_this);
+    });
+    return this.request;
+  };
+
+  return Ajax;
+
+})(Storage);
+
+module.exports = Ajax;
+
+},{"./Storage":15}],15:[function(require,module,exports){
+var Storage,
+  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+Storage = (function() {
+  function Storage(collection) {
+    this.collection = collection;
+    this.all = __bind(this.all, this);
+    this.model = this.collection.model;
+    this.options = this.collection.options;
+    this.records = this.collection.records;
+  }
+
+  Storage.prototype.add = function(records) {};
+
+  Storage.prototype.all = function(options) {
+    if (options == null) {
+      options = {};
+    }
+  };
+
+  Storage.prototype.find = function() {};
+
+  Storage.prototype.findBy = function() {};
+
+  Storage.prototype.save = function(records) {};
+
+  Storage.prototype.destroy = function(records) {};
+
+  return Storage;
+
+})();
+
+module.exports = Storage;
+
+},{}],16:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v2.1.0-beta3
  * http://jquery.com/
@@ -10748,7 +10852,7 @@ return jQuery;
 
 }));
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 (function() {
   var $, _,
     __slice = [].slice;
@@ -10967,7 +11071,7 @@ return jQuery;
 
 }).call(this);
 
-},{"jquery":14,"underscore-plus":17}],16:[function(require,module,exports){
+},{"jquery":16,"underscore-plus":19}],18:[function(require,module,exports){
 (function() {
   var $, Builder, Events, SelfClosingTags, Tags, View, callAttachHook, exports, idCounter, jQuery, methodName, originalCleanData, _fn, _fn1, _i, _j, _len, _len1, _ref, _ref1,
     __hasProp = {}.hasOwnProperty,
@@ -11367,7 +11471,7 @@ return jQuery;
 
 }).call(this);
 
-},{"./jquery-extensions":15}],17:[function(require,module,exports){
+},{"./jquery-extensions":17}],19:[function(require,module,exports){
 (function() {
   var isEqual, modifierKeyMap, plus, _,
     __slice = [].slice;
@@ -11657,7 +11761,7 @@ return jQuery;
 
 }).call(this);
 
-},{"tantamount":18,"underscore":19}],18:[function(require,module,exports){
+},{"tantamount":20,"underscore":21}],20:[function(require,module,exports){
 (function() {
   var isEqual, _, _isEqual;
 
@@ -11751,7 +11855,7 @@ return jQuery;
 
 }).call(this);
 
-},{"underscore":19}],19:[function(require,module,exports){
+},{"underscore":21}],21:[function(require,module,exports){
 //     Underscore.js 1.5.2
 //     http://underscorejs.org
 //     (c) 2009-2013 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -13029,7 +13133,7 @@ return jQuery;
 
 }).call(this);
 
-},{}],20:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 // Generated by CoffeeScript 1.6.3
 (function() {
   var Inflections, root, _,
@@ -13310,7 +13414,7 @@ return jQuery;
 
 }).call(this);
 
-},{"underscore":22,"underscore.string":21}],21:[function(require,module,exports){
+},{"underscore":24,"underscore.string":23}],23:[function(require,module,exports){
 //  Underscore.string
 //  (c) 2010 Esa-Matti Suuronen <esa-matti aet suuronen dot org>
 //  Underscore.string is freely distributable under the terms of the MIT license.
@@ -13985,8 +14089,8 @@ return jQuery;
   root._.string = root._.str = _s;
 }(this, String);
 
-},{}],22:[function(require,module,exports){
-module.exports=require(19)
+},{}],24:[function(require,module,exports){
+module.exports=require(21)
 },{}]},{},[1])
 (1)
 });

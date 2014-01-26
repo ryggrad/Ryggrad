@@ -1,5 +1,6 @@
 $    = jQuery
 Base = require('./Base')
+Ajax = require('./storage/Ajax')
 
 class Collection extends Base
   constructor: (options = {}) ->
@@ -17,12 +18,9 @@ class Collection extends Base
     @records.observe   = @observe
     @records.unobserve = @unobserve
     @records.promise   = @promise
+    @options = options
 
-    if 'all' of options
-      @asyncAllRequest = options.all
-
-    if 'find' of options
-      @asyncFindRequest = options.find
+    @storage = options.storage or new Ajax(@)
 
   count: =>
     @records.length
@@ -43,17 +41,17 @@ class Collection extends Base
     if record and not options.remote
       record
     else
-      @asyncFind(id, options)
+      @storage.find(id, options)
 
   findBy: (callback, request) =>
     if typeof callback is 'string'
       filter = (r) -> r.get(callback) is request
-      @syncFindBy(filter)
+      @syncFindBy(filter) or @storage.findBy(filter)
     else
       unless typeof callback is 'function'
         throw new Error('callback function required')
 
-      @syncFindBy(callback) or @asyncFindBy(request)
+      @syncFindBy(callback) or @storage.findBy(callback)
 
   refresh: (options = {}) =>
     @reset()
@@ -65,7 +63,7 @@ class Collection extends Base
       callback = null
 
     if @shouldPreload() or options.remote
-      result = @asyncAll(options)
+      result = @storage.all(options)
     else
       result = @records
 
@@ -92,7 +90,7 @@ class Collection extends Base
     @off('observe', callback)
 
   fetch: (options = {}) =>
-    @asyncAll(options).request
+    @storage.all(options).request
 
   each: (callback) =>
     @all().promise.done (records) =>
@@ -166,6 +164,8 @@ class Collection extends Base
 
     @sort()
 
+    @storage.add(records)
+
     # Unless we're the model's base collection
     # also add the record to that
     @model.add(records) unless @isBase()
@@ -183,6 +183,8 @@ class Collection extends Base
       record
 
   remove: (records) =>
+    @storage.destroy(records)
+
     unless $.isArray(records)
       records = [records]
 
@@ -218,62 +220,5 @@ class Collection extends Base
   isBase: =>
     return true if @name is 'base'
     @model.collection is this
-
-  asyncFind: (id, options = {}) =>
-    return unless @asyncFindRequest and @model.uri()
-
-    record         = new @model(id: id)
-    request        = @asyncFindRequest.call(@model, record, options.request)
-    record.request = request
-    record.promise = $.Deferred()
-
-    request.done (response) =>
-      record.set(response)
-      record.promise.resolve(record)
-      @add(record)
-
-    record
-
-  asyncAll: (options = {}) =>
-    return unless @asyncAllRequest and @model.uri()
-
-    @request = @asyncAllRequest.call(@model, @model, options.request)
-    @records.request = @request
-    @records.promise = @promise = $.Deferred()
-    @request.done (result) =>
-      @add(result)
-      @promise.resolve(@records)
-    @records
-
-  asyncFindBy: (asyncRequest) =>
-    return unless asyncRequest and @model.uri()
-
-    record         = new @model
-    request        = asyncRequest.call(@model, record)
-    record.request = request
-    record.promise = $.Deferred()
-
-    request.done (response) =>
-      record.set(response)
-      record.promise.resolve(record)
-      @add(record)
-
-    record
-
-  asyncAllRequest: (model, options = {}) =>
-    defaults =
-      url: model.uri()
-      dataType: 'json'
-      type: 'GET'
-
-    $.ajax($.extend(defaults, options))
-
-  asyncFindRequest: (record, options = {}) =>
-    defaults =
-      url: record.uri()
-      dataType: 'json'
-      type: 'GET'
-
-    $.ajax($.extend(defaults, options))
 
 module.exports = Collection

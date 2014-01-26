@@ -47,20 +47,20 @@ describe "Model", ->
 
     asset.destroy()
     expect(Asset.exists(asset.id)).to.be.falsey
-
+ 
   it "can select records", ->
     asset = Asset.create(name: "foo.pdf")
     selected = Asset.filter((rec) ->
       rec.name is "foo.pdf"
     )
     selected[0].name.should.equal asset.name
-
+ 
   it "can return all records", ->
     asset1 = Asset.create(name: "test.pdf")
     asset2 = Asset.create(name: "foo.pdf")
     Asset.all()[0].name.should.equal asset1.name 
     Asset.all()[1].name.should.equal asset2.name
-
+ 
   it "can destroy all records", ->
     Asset.create name: "foo.pdf"
     Asset.create name: "foo.pdf"
@@ -76,7 +76,7 @@ describe "Model", ->
   # it "can be serialized into JSON", ->
   #   asset = new Asset(name: "Johnson me!")
   #   asset.toJSON().should.equal { id: 'c-0', name: 'Johnson me!' }
-  
+
   ### 
   # TODO
   ###
@@ -86,7 +86,7 @@ describe "Model", ->
   #   asset.name.should.equal "Un-Johnson me!"
   #   assets = Asset.fromJSON("[{\"name\":\"Un-Johnson me!\"}]")
   #   assets[0] and assets[0].name.should.equal "Un-Johnson me!"
-  
+
   ###
   # TODO
   ###
@@ -101,36 +101,36 @@ describe "Model", ->
   it "has attribute hash", ->
     asset = new Asset(name: "wazzzup!")
     asset.attributes.name.should.equal "wazzzup!"
-
+ 
   it "clones are dynamic", ->
     asset = Asset.create name: "hotel california"
     clone = Asset.find(asset.id)
     asset.name = "checkout anytime"
     asset.save()
     clone.name.should.equal "checkout anytime"
-
+ 
   it "should be able to change ID", ->
     asset = Asset.create name: "hotel california"
     asset.id.should.not.be null
     asset.id = "foo"
     asset.id.should.equal "foo"
     Asset.exists("foo").should.be.truthy
-  
+ 
     asset.id = "cat"
     asset.id.should.equal "cat"
     Asset.exists("cat").should.be.truthy
-  
+ 
   it "should generate unique cIDs", ->
     Asset.create
       name: "Bob"
       id: 3
-  
+ 
     Asset.create
       name: "Bob"
       id: 2  
-  
+ 
     Asset.all()[0].id.should.not.equal Asset.all()[1].id
-  
+ 
   it "should create multiple assets", ->
     i = 0
     while i < 12
@@ -147,3 +147,4 @@ describe "Model", ->
       i++
    
     Asset.count().should.equal 12
+ 
