@@ -1,6 +1,8 @@
-$          = jQuery
-Base       = require('./Base')
-Collection = require('./Collection')
+$           = jQuery
+Base        = require('./Base')
+Collection  = require('./Collection')
+AjaxStorage = require('./storage/Ajax')
+
 _ = require('underscore')
 _.mixin(require('underscore.inflections'))
 
@@ -25,20 +27,20 @@ class Model extends Base
   @count: ->
     @records().count()
 
-  @all: (callback) ->
-    @records().all(callback)
+  @all: (callback, options={}) ->
+    @records().all(callback, options)
 
-  @find: (id, options = {}) ->
+  @find: (id, options={}) ->
     @records().find(id, options)
 
-  @findBy: (callback, request) ->
-    @records().findBy(callback, request)
+  @findBy: (callback, request, options={}) ->
+    @records().findBy(callback, request, options)
 
   @filter: (callback) ->
     @records().filter(callback)
 
-  @add: (values) ->
-    @records().add(values)
+  @add: (values, options={}) ->
+    @records().add(values, options)
 
   @exists: (id) ->
     @records().exists(id)
@@ -51,10 +53,16 @@ class Model extends Base
     @url = (-> value) if value
     value or "/#{_.pluralize(@name.toLowerCase())}"
 
+  @pluralName: ->
+    "#{_.pluralize(@name.toLowerCase())}"
+
   @toString: -> @name
 
-  @on: (event, callback) ->
+  @on_record: (event, callback) ->
     @records().on("record.#{event}", callback)
+
+  @on_collection: (event, callback) ->
+    @records().on(event, callback)
 
   # Private
 
@@ -65,25 +73,30 @@ class Model extends Base
     uid = @uid(prefix) if @exists(uid)
     uid
 
-  @create: (atts = {}) ->
+  @create: (atts = {}, options={}) ->
     obj = new @(atts)
-    return obj.save()
+    resp = obj.save(null, options)
+    @trigger('create', resp)
+    resp
 
   @refresh: ->
     @records().refresh(arguments...)
 
-  @destroy: (record) ->
-    @records().remove(record)
+  @destroy: (records, options={}) ->
+    resp = @records().remove(records, options)
+    @trigger('destroy', resp)
+    resp
 
-  @destroyAll: ->
-    @records().reset()
+  @destroyAll: (options = {})  ->
+    @records().reset(options)
 
   @fetch: (options = {}) ->
-    @records().fetch(options)
+    resp = @records().fetch(options)
+    @trigger('fetch', resp)
+    resp
 
   # Public
   constructor: (atts = {}) ->
-    console.log 'twice? wtf atts: ', atts 
     if atts instanceof @constructor
       return atts
 
@@ -148,7 +161,7 @@ class Model extends Base
         value: value
 
       @trigger "observe:#{attr}", [change]
-      @trigger "update:#{attr}" if change.type == 'updated' and previous
+      @trigger "update:#{attr}", change if change.type == 'updated' and previous
 
     if changes.length
       @trigger 'observe', changes
@@ -157,6 +170,14 @@ class Model extends Base
 
   updateAttribute: (attr, val) ->
     @set(attr, val)
+
+  changeID: (id) ->
+    return if id is @getID()
+    records = @constructor.records().ids
+    records[id] = records[@getID()]
+    delete records[@getID()] unless @getCID() is @getID()
+    @set("id", id)
+    @save()
 
   getID:  -> @get('id')
   getCID: -> @cid
@@ -184,22 +205,23 @@ class Model extends Base
   exists: ->
     @constructor.exists(@getID())
 
-  add: ->
-    @constructor.add(this)
+  add: (options={}) ->
+    @constructor.add(this, options)
 
-  save: (attrs) =>
+  save: (attrs, options={}) =>
     @set(attrs) if attrs
-    
+
     isNew = @isNew()
-    @add()
+    options.isNew = isNew
+    @add(options)
 
     @trigger 'save'
     @trigger if isNew then 'create' else 'update'
 
     this
 
-  destroy: ->
-    @constructor.destroy(@)
+  destroy: (options={}) -> 
+    @constructor.destroy(@, options)
 
     @trigger 'destroy'
     this
@@ -251,7 +273,7 @@ class Model extends Base
 
   uri: (parts...) =>
     id = @getID()
-    if id and not @isNew() 
+    if id and not @isNew()
       @constructor.uri(id, parts...)
     else
       @constructor.uri(parts...)
@@ -279,8 +301,11 @@ class Model extends Base
     defaults =
       request:
         url: "#{@constructor.url()}/#{@get('id')}"
-     
+
     options = $.extend(defaults, options)
-    @constructor.fetch(options)
+    resp    = @constructor.fetch(options)
+
+    @trigger 'fetch'
+    resp
 
 module.exports = Model
