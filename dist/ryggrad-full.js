@@ -32,11 +32,13 @@ Ryggrad.Router = require('./ryggrad/Router');
 
 Ryggrad.Util = require('./ryggrad/Util');
 
+Ryggrad.LocalStorage = require('./ryggrad/storage/Local');
+
 Ryggrad.version = "0.0.5";
 
 module.exports = Ryggrad;
 
-},{"./ryggrad/Base":3,"./ryggrad/Collection":4,"./ryggrad/Controller":5,"./ryggrad/Events":6,"./ryggrad/Model":7,"./ryggrad/Module":8,"./ryggrad/Route":9,"./ryggrad/Router":10,"./ryggrad/Util":11,"./ryggrad/jquery/ajax":12,"./ryggrad/jquery/extensions":13,"jquery":16,"space-pen":18}],3:[function(require,module,exports){
+},{"./ryggrad/Base":3,"./ryggrad/Collection":4,"./ryggrad/Controller":5,"./ryggrad/Events":6,"./ryggrad/Model":7,"./ryggrad/Module":8,"./ryggrad/Route":9,"./ryggrad/Router":10,"./ryggrad/Util":11,"./ryggrad/jquery/ajax":12,"./ryggrad/jquery/extensions":13,"./ryggrad/storage/Local":15,"jquery":17,"space-pen":19}],3:[function(require,module,exports){
 var Base, Events, Module, _ref,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -79,6 +81,7 @@ Collection = (function(_super) {
   __extends(Collection, _super);
 
   function Collection(options) {
+    var _base;
     if (options == null) {
       options = {};
     }
@@ -122,7 +125,14 @@ Collection = (function(_super) {
     this.records.unobserve = this.unobserve;
     this.records.promise = this.promise;
     this.options = options;
-    this.storage = options.storage || new Ajax(this);
+    (_base = this.model).storageOptions || (_base.storageOptions = {});
+    if (options.storage) {
+      this.storage = new options.storage(this, this.model.storageOptions);
+    } else if (this.model.storage) {
+      this.storage = new this.model.storage(this, this.model.storageOptions);
+    } else {
+      this.storage = new Ajax(this, this.model.storageOptions);
+    }
   }
 
   Collection.prototype.count = function() {
@@ -144,27 +154,37 @@ Collection = (function(_super) {
     if (typeof id.getID === 'function') {
       id = id.getID();
     }
-    record = this.syncFind(id);
-    record || (record = this.baseSyncFind(id));
-    if (record && !options.remote) {
-      return record;
+    if (options.remote) {
+      return this.storage.find(id, options.remote);
     } else {
-      return this.storage.find(id, options);
+      record = this.syncFind(id);
+      return record || (record = this.baseSyncFind(id));
     }
   };
 
-  Collection.prototype.findBy = function(callback, request) {
+  Collection.prototype.findBy = function(callback, request, options) {
     var filter;
+    if (options == null) {
+      options = {};
+    }
     if (typeof callback === 'string') {
       filter = function(r) {
         return r.get(callback) === request;
       };
-      return this.syncFindBy(filter) || this.storage.findBy(filter);
+      if (options.remote) {
+        return this.storage.findBy(callback, request, options);
+      } else {
+        return this.syncFindBy(filter);
+      }
     } else {
       if (typeof callback !== 'function') {
         throw new Error('callback function required');
       }
-      return this.syncFindBy(callback) || this.storage.findBy(callback);
+      if (options.remote) {
+        return this.storage.findBy(callback, options.remote);
+      } else {
+        return this.syncFindBy(callback);
+      }
     }
   };
 
@@ -173,7 +193,9 @@ Collection = (function(_super) {
       options = {};
     }
     this.reset();
-    return this.fetch(options);
+    if (options.remote) {
+      return this.fetch(options);
+    }
   };
 
   Collection.prototype.all = function(callback, options) {
@@ -183,15 +205,14 @@ Collection = (function(_super) {
     }
     if (typeof callback === 'object') {
       options = callback;
-      callback = null;
+      if (typeof options === 'function') {
+        callback = options;
+      }
     }
     if (this.shouldPreload() || options.remote) {
-      result = this.storage.all(options);
+      result = this.storage.all(options.remote);
     } else {
       result = this.records;
-    }
-    if (callback) {
-      this.promise.done(callback);
     }
     return result;
   };
@@ -200,11 +221,14 @@ Collection = (function(_super) {
     return this.records.filter(callback)[0];
   };
 
-  Collection.prototype.reset = function() {
-    this.remove(this.records);
+  Collection.prototype.reset = function(options) {
+    if (options == null) {
+      options = {};
+    }
+    this.remove(this.records, options);
     this.ids = {};
     this.cids = {};
-    this.trigger('reset');
+    this.trigger('reset', []);
     return this.trigger('observe', []);
   };
 
@@ -220,7 +244,7 @@ Collection = (function(_super) {
     if (options == null) {
       options = {};
     }
-    return this.storage.all(options).request;
+    return this.storage.all(options.remote);
   };
 
   Collection.prototype.each = function(callback) {
@@ -268,8 +292,11 @@ Collection = (function(_super) {
     return this.records.length === 0;
   };
 
-  Collection.prototype.add = function(records) {
+  Collection.prototype.add = function(records, options) {
     var changes, i, original, record, _base, _i, _len, _name, _ref;
+    if (options == null) {
+      options = {};
+    }
     if (!records) {
       return;
     }
@@ -308,7 +335,13 @@ Collection = (function(_super) {
       });
     }
     this.sort();
-    this.storage.add(records);
+    if (options.remote) {
+      if (options.isNew) {
+        this.storage.add(records, options.remote);
+      } else {
+        this.storage.save(records, options.remote);
+      }
+    }
     if (!this.isBase()) {
       this.model.add(records);
     }
@@ -331,14 +364,15 @@ Collection = (function(_super) {
     }
   };
 
-  Collection.prototype.remove = function(records) {
-    var index, record, _i, _len, _ref, _results;
-    this.storage.destroy(records);
+  Collection.prototype.remove = function(records, options) {
+    var index, record, _i, _len, _ref;
+    if (options == null) {
+      options = {};
+    }
     if (!$.isArray(records)) {
       records = [records];
     }
     _ref = records.slice(0);
-    _results = [];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       record = _ref[_i];
       record.off('all', this.recordEvent);
@@ -347,9 +381,11 @@ Collection = (function(_super) {
         delete this.ids[record.getID()];
       }
       index = this.records.indexOf(record);
-      _results.push(this.records.splice(index, 1));
+      this.records.splice(index, 1);
     }
-    return _results;
+    if (options.remote) {
+      return this.storage.destroy(records, options.remote);
+    }
   };
 
   Collection.prototype.comparator = function(a, b) {
@@ -607,7 +643,7 @@ Events = {
 module.exports = Events;
 
 },{}],7:[function(require,module,exports){
-var $, Base, Collection, Model, eql, _,
+var $, AjaxStorage, Base, Collection, Model, eql, _,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -618,6 +654,8 @@ $ = jQuery;
 Base = require('./Base');
 
 Collection = require('./Collection');
+
+AjaxStorage = require('./storage/Ajax');
 
 _ = require('underscore');
 
@@ -654,8 +692,11 @@ Model = (function(_super) {
     return this.records().count();
   };
 
-  Model.all = function(callback) {
-    return this.records().all(callback);
+  Model.all = function(callback, options) {
+    if (options == null) {
+      options = {};
+    }
+    return this.records().all(callback, options);
   };
 
   Model.find = function(id, options) {
@@ -665,16 +706,22 @@ Model = (function(_super) {
     return this.records().find(id, options);
   };
 
-  Model.findBy = function(callback, request) {
-    return this.records().findBy(callback, request);
+  Model.findBy = function(callback, request, options) {
+    if (options == null) {
+      options = {};
+    }
+    return this.records().findBy(callback, request, options);
   };
 
   Model.filter = function(callback) {
     return this.records().filter(callback);
   };
 
-  Model.add = function(values) {
-    return this.records().add(values);
+  Model.add = function(values, options) {
+    if (options == null) {
+      options = {};
+    }
+    return this.records().add(values, options);
   };
 
   Model.exists = function(id) {
@@ -697,12 +744,20 @@ Model = (function(_super) {
     return value || ("/" + (_.pluralize(this.name.toLowerCase())));
   };
 
+  Model.pluralName = function() {
+    return "" + (_.pluralize(this.name.toLowerCase()));
+  };
+
   Model.toString = function() {
     return this.name;
   };
 
-  Model.on = function(event, callback) {
+  Model.on_record = function(event, callback) {
     return this.records().on("record." + event, callback);
+  };
+
+  Model.on_collection = function(event, callback) {
+    return this.records().on(event, callback);
   };
 
   Model.uidCounter = 0;
@@ -719,13 +774,18 @@ Model = (function(_super) {
     return uid;
   };
 
-  Model.create = function(atts) {
-    var obj;
+  Model.create = function(atts, options) {
+    var obj, resp;
     if (atts == null) {
       atts = {};
     }
+    if (options == null) {
+      options = {};
+    }
     obj = new this(atts);
-    return obj.save();
+    resp = obj.save(null, options);
+    this.trigger('create', resp);
+    return resp;
   };
 
   Model.refresh = function() {
@@ -733,19 +793,31 @@ Model = (function(_super) {
     return (_ref = this.records()).refresh.apply(_ref, arguments);
   };
 
-  Model.destroy = function(record) {
-    return this.records().remove(record);
-  };
-
-  Model.destroyAll = function() {
-    return this.records().reset();
-  };
-
-  Model.fetch = function(options) {
+  Model.destroy = function(records, options) {
+    var resp;
     if (options == null) {
       options = {};
     }
-    return this.records().fetch(options);
+    resp = this.records().remove(records, options);
+    this.trigger('destroy', resp);
+    return resp;
+  };
+
+  Model.destroyAll = function(options) {
+    if (options == null) {
+      options = {};
+    }
+    return this.records().reset(options);
+  };
+
+  Model.fetch = function(options) {
+    var resp;
+    if (options == null) {
+      options = {};
+    }
+    resp = this.records().fetch(options);
+    this.trigger('fetch', resp);
+    return resp;
   };
 
   function Model(atts) {
@@ -762,7 +834,6 @@ Model = (function(_super) {
     this.set = __bind(this.set, this);
     this.get = __bind(this.get, this);
     this.resolve = __bind(this.resolve, this);
-    console.log('twice? wtf atts: ', atts);
     if (atts instanceof this.constructor) {
       return atts;
     }
@@ -847,7 +918,7 @@ Model = (function(_super) {
       });
       this.trigger("observe:" + attr, [change]);
       if (change.type === 'updated' && previous) {
-        this.trigger("update:" + attr);
+        this.trigger("update:" + attr, change);
       }
     }
     if (changes.length) {
@@ -858,6 +929,20 @@ Model = (function(_super) {
 
   Model.prototype.updateAttribute = function(attr, val) {
     return this.set(attr, val);
+  };
+
+  Model.prototype.changeID = function(id) {
+    var records;
+    if (id === this.getID()) {
+      return;
+    }
+    records = this.constructor.records().ids;
+    records[id] = records[this.getID()];
+    if (this.getCID() !== this.getID()) {
+      delete records[this.getID()];
+    }
+    this.set("id", id);
+    return this.save();
   };
 
   Model.prototype.getID = function() {
@@ -912,24 +997,34 @@ Model = (function(_super) {
     return this.constructor.exists(this.getID());
   };
 
-  Model.prototype.add = function() {
-    return this.constructor.add(this);
+  Model.prototype.add = function(options) {
+    if (options == null) {
+      options = {};
+    }
+    return this.constructor.add(this, options);
   };
 
-  Model.prototype.save = function(attrs) {
+  Model.prototype.save = function(attrs, options) {
     var isNew;
+    if (options == null) {
+      options = {};
+    }
     if (attrs) {
       this.set(attrs);
     }
     isNew = this.isNew();
-    this.add();
+    options.isNew = isNew;
+    this.add(options);
     this.trigger('save');
     this.trigger(isNew ? 'create' : 'update');
     return this;
   };
 
-  Model.prototype.destroy = function() {
-    this.constructor.destroy(this);
+  Model.prototype.destroy = function(options) {
+    if (options == null) {
+      options = {};
+    }
+    this.constructor.destroy(this, options);
     this.trigger('destroy');
     return this;
   };
@@ -1038,7 +1133,7 @@ Model = (function(_super) {
   };
 
   Model.prototype.fetch = function(options) {
-    var defaults;
+    var defaults, resp;
     if (options == null) {
       options = {};
     }
@@ -1048,7 +1143,9 @@ Model = (function(_super) {
       }
     };
     options = $.extend(defaults, options);
-    return this.constructor.fetch(options);
+    resp = this.constructor.fetch(options);
+    this.trigger('fetch');
+    return resp;
   };
 
   return Model;
@@ -1057,7 +1154,7 @@ Model = (function(_super) {
 
 module.exports = Model;
 
-},{"./Base":3,"./Collection":4,"underscore":24,"underscore.inflections":22}],8:[function(require,module,exports){
+},{"./Base":3,"./Collection":4,"./storage/Ajax":14,"underscore":24,"underscore.inflections":22}],8:[function(require,module,exports){
 var Module, moduleKeywords,
   __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
   __slice = [].slice,
@@ -1510,7 +1607,7 @@ module.exports = function(window) {
   return $.extend($.fn.hasEvent);
 };
 
-},{"jquery":16}],14:[function(require,module,exports){
+},{"jquery":17}],14:[function(require,module,exports){
 var Ajax, Storage,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
@@ -1540,7 +1637,8 @@ Ajax = (function(_super) {
   }
 
   Ajax.prototype.add = function(records) {
-    var isNew, record, type, _i, _len, _results;
+    var isNew, record, type, _i, _len, _results,
+      _this = this;
     if (!$.isArray(records)) {
       records = [records];
     }
@@ -1549,13 +1647,19 @@ Ajax = (function(_super) {
       record = records[_i];
       isNew = record.isNew();
       type = isNew ? 'POST' : 'PUT';
-      _results.push(this.setRequest(record.set($.ajax({
+      this.setRequest(record.set($.ajax({
         type: type,
         url: record.uri(),
         data: record.toJSON(),
         queue: true,
         warn: true
-      }))));
+      })));
+      _results.push(this.request.done(function(result) {
+        if (result.id && record.id !== result.id) {
+          record.changeID(result.id);
+        }
+        return record.set(result);
+      }));
     }
     return _results;
   };
@@ -1572,10 +1676,10 @@ Ajax = (function(_super) {
     this.records.request = this.request;
     this.records.promise = this.promise = $.Deferred();
     this.request.done(function(result) {
-      _this.add(result);
+      _this.collection.add(result);
       return _this.promise.resolve(_this.records);
     });
-    return this.records;
+    return this.request;
   };
 
   Ajax.prototype.find = function(id, options) {
@@ -1593,7 +1697,7 @@ Ajax = (function(_super) {
     request.done(function(response) {
       record.set(response);
       record.promise.resolve(record);
-      return _this.add(record);
+      return _this.collection.add(record);
     });
     return record;
   };
@@ -1608,7 +1712,7 @@ Ajax = (function(_super) {
     request.done(function(response) {
       record.set(response);
       record.promise.resolve(record);
-      return _this.add(record);
+      return _this.collection.add(record);
     });
     return record;
   };
@@ -1694,17 +1798,108 @@ Ajax = (function(_super) {
 
 module.exports = Ajax;
 
-},{"./Storage":15}],15:[function(require,module,exports){
+},{"./Storage":16}],15:[function(require,module,exports){
+var Local, Storage, _ref,
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+
+Storage = require('./Storage');
+
+Local = (function(_super) {
+  __extends(Local, _super);
+
+  function Local() {
+    _ref = Local.__super__.constructor.apply(this, arguments);
+    return _ref;
+  }
+
+  Local.prototype.add = function(records) {
+    var record, _i, _len, _results;
+    if (!$.isArray(records)) {
+      records = [records];
+    }
+    localStorage[this.key_name] = JSON.stringify(this.records);
+    _results = [];
+    for (_i = 0, _len = records.length; _i < _len; _i++) {
+      record = records[_i];
+      localStorage[record.id] = record.asJSON();
+      _results.push(localStorage[record.cid] = record.asJSON());
+    }
+    return _results;
+  };
+
+  Local.prototype.all = function() {
+    var result;
+    if (localStorage[this.key_name]) {
+      result = JSON.parse(localStorage[this.key_name]);
+      this.collection.add(result);
+    }
+    return this.records;
+  };
+
+  Local.prototype.find = function(record) {
+    var newRecord;
+    newRecord = null;
+    if (localStorage[record.id]) {
+      newRecord = new this.model(JSON.parse(localStorage[record.id]));
+    } else if (localStorage[record.cid]) {
+      newRecord = new this.model(JSON.parse(localStorage[record.cid]));
+    } else {
+      newRecord = new this.model();
+    }
+    this.collection.add(newRecord);
+    return newRecord;
+  };
+
+  Local.prototype.findBy = function(callback) {
+    var newRecord, records;
+    if (localStorage[this.key_name]) {
+      records = JSON.parse(localStorage[this.key_name]);
+    }
+    newRecord = new this.model(records.filter(callback)[0]);
+    this.collection.add(newRecord);
+    return newRecord;
+  };
+
+  Local.prototype.save = function(records) {
+    return this.add(records);
+  };
+
+  Local.prototype.destroy = function(records) {
+    var record, _i, _len;
+    if (!$.isArray(records)) {
+      records = [records];
+    }
+    for (_i = 0, _len = records.length; _i < _len; _i++) {
+      record = records[_i];
+      if (localStorage[record.id]) {
+        delete localStorage[record.id];
+      }
+      if (localStorage[record.cid]) {
+        delete localStorage[record.cid];
+      }
+    }
+    return localStorage[this.key_name] = JSON.stringify(this.records);
+  };
+
+  return Local;
+
+})(Storage);
+
+module.exports = Local;
+
+},{"./Storage":16}],16:[function(require,module,exports){
 var Storage,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
 Storage = (function() {
-  function Storage(collection) {
+  function Storage(collection, storageOptions) {
     this.collection = collection;
     this.all = __bind(this.all, this);
     this.model = this.collection.model;
     this.options = this.collection.options;
     this.records = this.collection.records;
+    this.key_name = this.model.pluralName();
   }
 
   Storage.prototype.add = function(records) {};
@@ -1729,7 +1924,7 @@ Storage = (function() {
 
 module.exports = Storage;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v2.1.0-beta3
  * http://jquery.com/
@@ -10852,7 +11047,7 @@ return jQuery;
 
 }));
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 (function() {
   var $, _,
     __slice = [].slice;
@@ -11071,7 +11266,7 @@ return jQuery;
 
 }).call(this);
 
-},{"jquery":16,"underscore-plus":19}],18:[function(require,module,exports){
+},{"jquery":17,"underscore-plus":20}],19:[function(require,module,exports){
 (function() {
   var $, Builder, Events, SelfClosingTags, Tags, View, callAttachHook, exports, idCounter, jQuery, methodName, originalCleanData, _fn, _fn1, _i, _j, _len, _len1, _ref, _ref1,
     __hasProp = {}.hasOwnProperty,
@@ -11471,7 +11666,7 @@ return jQuery;
 
 }).call(this);
 
-},{"./jquery-extensions":17}],19:[function(require,module,exports){
+},{"./jquery-extensions":18}],20:[function(require,module,exports){
 (function() {
   var isEqual, modifierKeyMap, plus, _,
     __slice = [].slice;
@@ -11761,7 +11956,7 @@ return jQuery;
 
 }).call(this);
 
-},{"tantamount":20,"underscore":21}],20:[function(require,module,exports){
+},{"tantamount":21,"underscore":24}],21:[function(require,module,exports){
 (function() {
   var isEqual, _, _isEqual;
 
@@ -11855,7 +12050,963 @@ return jQuery;
 
 }).call(this);
 
-},{"underscore":21}],21:[function(require,module,exports){
+},{"underscore":24}],22:[function(require,module,exports){
+// Generated by CoffeeScript 1.6.3
+(function() {
+  var Inflections, root, _,
+    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+    __slice = [].slice;
+
+  Inflections = (function() {
+    Inflections.prototype.defaultUncountables = ['equipment', 'information', 'rice', 'money', 'species', 'series', 'fish', 'sheep', 'jeans', 'moose', 'deer', 'news', 'music'];
+
+    Inflections.prototype.defaultPluralRules = [[/$/, 's'], [/s$/i, 's'], [/^(ax|test)is$/i, '$1es'], [/(octop|vir)us$/i, '$1i'], [/(octop|vir)i$/i, '$1i'], [/(alias|status)$/i, '$1es'], [/(bu)s$/i, '$1ses'], [/(buffal|tomat)o$/i, '$1oes'], [/([ti])um$/i, '$1a'], [/([ti])a$/i, '$1a'], [/sis$/i, 'ses'], [/(?:([^f])fe|([lr])f)$/i, '$1$2ves'], [/(hive)$/i, '$1s'], [/([^aeiouy]|qu)y$/i, '$1ies'], [/(x|ch|ss|sh)$/i, '$1es'], [/(matr|vert|ind)(?:ix|ex)$/i, '$1ices'], [/(m|l)ouse$/i, '$1ice'], [/(m|l)ice$/i, '$1ice'], [/^(ox)$/i, '$1en'], [/^(oxen)$/i, '$1'], [/(quiz)$/i, '$1zes']];
+
+    Inflections.prototype.defaultSingularRules = [[/s$/i, ''], [/(ss)$/i, '$1'], [/(n)ews$/i, '$1ews'], [/([ti])a$/i, '$1um'], [/((a)naly|(b)a|(d)iagno|(p)arenthe|(p)rogno|(s)ynop|(t)he)(sis|ses)$/i, '$1$2sis'], [/(^analy)(sis|ses)$/i, '$1sis'], [/([^f])ves$/i, '$1fe'], [/(hive)s$/i, '$1'], [/(tive)s$/i, '$1'], [/([lr])ves$/i, '$1f'], [/([^aeiouy]|qu)ies$/i, '$1y'], [/(s)eries$/i, '$1eries'], [/(m)ovies$/i, '$1ovie'], [/(x|ch|ss|sh)es$/i, '$1'], [/(m|l)ice$/i, '$1ouse'], [/(bus)(es)?$/i, '$1'], [/(o)es$/i, '$1'], [/(shoe)s$/i, '$1'], [/(cris|test)(is|es)$/i, '$1is'], [/^(a)x[ie]s$/i, '$1xis'], [/(octop|vir)(us|i)$/i, '$1us'], [/(alias|status)(es)?$/i, '$1'], [/^(ox)en/i, '$1'], [/(vert|ind)ices$/i, '$1ex'], [/(matr)ices$/i, '$1ix'], [/(quiz)zes$/i, '$1'], [/(database)s$/i, '$1']];
+
+    Inflections.prototype.defaultIrregularRules = [['person', 'people'], ['man', 'men'], ['child', 'children'], ['sex', 'sexes'], ['move', 'moves'], ['cow', 'kine'], ['zombie', 'zombies']];
+
+    Inflections.prototype.defaultHumanRules = [];
+
+    function Inflections() {
+      this.apply_inflections = __bind(this.apply_inflections, this);
+
+      this.titleize = __bind(this.titleize, this);
+      this.humanize = __bind(this.humanize, this);
+      this.underscore = __bind(this.underscore, this);
+      this.camelize = __bind(this.camelize, this);
+      this.singularize = __bind(this.singularize, this);
+
+      this.pluralize = __bind(this.pluralize, this);
+
+      this.clearInflections = __bind(this.clearInflections, this);
+
+      this.human = __bind(this.human, this);
+      this.uncountable = __bind(this.uncountable, this);
+
+      this.irregular = __bind(this.irregular, this);
+
+      this.singular = __bind(this.singular, this);
+
+      this.plural = __bind(this.plural, this);
+
+      this.acronym = __bind(this.acronym, this);
+      this.applyDefaultPlurals = __bind(this.applyDefaultPlurals, this);
+
+      this.applyDefaultUncountables = __bind(this.applyDefaultUncountables, this);
+
+      this.applyDefaultRules = __bind(this.applyDefaultRules, this);
+      this.plurals = [];
+      this.singulars = [];
+      this.uncountables = [];
+      this.humans = [];
+      this.acronyms = {};
+      this.applyDefaultRules();
+    }
+
+    Inflections.prototype.applyDefaultRules = function() {
+      this.applyDefaultUncountables();
+      this.applyDefaultPlurals();
+      this.applyDefaultSingulars();
+      return this.applyDefaultIrregulars();
+    };
+
+    Inflections.prototype.applyDefaultUncountables = function() {
+      return this.uncountable(this.defaultUncountables);
+    };
+
+    Inflections.prototype.applyDefaultPlurals = function() {
+      var _this = this;
+      return _.each(this.defaultPluralRules, function(rule) {
+        var capture, regex;
+        regex = rule[0], capture = rule[1];
+        return _this.plural(regex, capture);
+      });
+    };
+
+    Inflections.prototype.applyDefaultSingulars = function() {
+      var _this = this;
+      return _.each(this.defaultSingularRules, function(rule) {
+        var capture, regex;
+        regex = rule[0], capture = rule[1];
+        return _this.singular(regex, capture);
+      });
+    };
+
+    Inflections.prototype.applyDefaultIrregulars = function() {
+      var _this = this;
+      return _.each(this.defaultIrregularRules, function(rule) {
+        var plural, singular;
+        singular = rule[0], plural = rule[1];
+        return _this.irregular(singular, plural);
+      });
+    };
+
+    Inflections.prototype.acronym = function(word) {
+      this.acronyms[word.toLowerCase()] = word;
+      return this.acronym_matchers = _.values(this.acronyms).join("|");
+    };
+
+    Inflections.prototype.plural = function(rule, replacement) {
+      if (typeof rule === 'string') {
+        delete this.uncountables[_.indexOf(this.uncountables, rule)];
+      }
+      delete this.uncountables[_.indexOf(this.uncountables, replacement)];
+      return this.plurals.unshift([rule, replacement]);
+    };
+
+    Inflections.prototype.singular = function(rule, replacement) {
+      if (typeof rule === 'string') {
+        delete this.uncountables[_.indexOf(this.uncountables, rule)];
+      }
+      delete this.uncountables[_.indexOf(this.uncountables, replacement)];
+      return this.singulars.unshift([rule, replacement]);
+    };
+
+    Inflections.prototype.irregular = function(singular, plural) {
+      delete this.uncountables[_.indexOf(this.uncountables, singular)];
+      delete this.uncountables[_.indexOf(this.uncountables, plural)];
+      if (singular.substring(0, 1).toUpperCase() === plural.substring(0, 1).toUpperCase()) {
+        this.plural(new RegExp("(" + (singular.substring(0, 1)) + ")" + (singular.substring(1, plural.length)) + "$", "i"), '$1' + plural.substring(1, plural.length));
+        this.plural(new RegExp("(" + (plural.substring(0, 1)) + ")" + (plural.substring(1, plural.length)) + "$", "i"), '$1' + plural.substring(1, plural.length));
+        return this.singular(new RegExp("(" + (plural.substring(0, 1)) + ")" + (plural.substring(1, plural.length)) + "$", "i"), '$1' + singular.substring(1, plural.length));
+      } else {
+        this.plural(new RegExp("" + (singular.substring(0, 1)) + (singular.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
+        this.plural(new RegExp("" + (singular.substring(0, 1)) + (singular.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
+        this.plural(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
+        this.plural(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
+        this.singular(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), singular.substring(0, 1) + singular.substring(1, plural.length));
+        return this.singular(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), singular.substring(0, 1) + singular.substring(1, plural.length));
+      }
+    };
+
+    Inflections.prototype.uncountable = function() {
+      var words;
+      words = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      this.uncountables.push(words);
+      return this.uncountables = _.flatten(this.uncountables);
+    };
+
+    Inflections.prototype.human = function(rule, replacement) {
+      return this.humans.unshift([rule, replacement]);
+    };
+
+    Inflections.prototype.clearInflections = function(scope) {
+      if (scope == null) {
+        scope = 'all';
+      }
+      return this[scope] = [];
+    };
+
+    Inflections.prototype.pluralize = function(word, count, options) {
+      var result, _ref;
+      if (options == null) {
+        options = {};
+      }
+      options = _.extend({
+        plural: void 0,
+        showNumber: true
+      }, options);
+      if (count !== void 0) {
+        result = "";
+        if (options.showNumber === true) {
+          result += "" + (count != null ? count : 0) + " ";
+        }
+        return result += count === 1 || (count != null ? typeof count.toString === "function" ? count.toString().match(/^1(\.0+)?$/) : void 0 : void 0) ? word : (_ref = options.plural) != null ? _ref : this.pluralize(word);
+      } else {
+        return this.apply_inflections(word, this.plurals);
+      }
+    };
+
+    Inflections.prototype.singularize = function(word) {
+      return this.apply_inflections(word, this.singulars);
+    };
+
+    Inflections.prototype.camelize = function(term, uppercase_first_letter) {
+      var _this = this;
+      if (uppercase_first_letter == null) {
+        uppercase_first_letter = true;
+      }
+      if (uppercase_first_letter) {
+        term = term.replace(/^[a-z\d]*/, function(a) {
+          return _this.acronyms[a] || _.capitalize(a);
+        });
+      } else {
+        term = term.replace(RegExp("^(?:" + this.acronym_matchers + "(?=\\b|[A-Z_])|\\w)"), function(a) {
+          return a.toLowerCase();
+        });
+      }
+      return term = term.replace(/(?:_|(\/))([a-z\d]*)/gi, function(match, $1, $2, idx, string) {
+        $1 || ($1 = '');
+        return "" + $1 + (_this.acronyms[$2] || _.capitalize($2));
+      });
+    };
+
+    Inflections.prototype.underscore = function(camel_cased_word) {
+      var word;
+      word = camel_cased_word;
+      word = word.replace(RegExp("(?:([A-Za-z\\d])|^)(" + this.acronym_matchers + ")(?=\\b|[^a-z])", "g"), function(match, $1, $2) {
+        return "" + ($1 || '') + ($1 ? '_' : '') + ($2.toLowerCase());
+      });
+      word = word.replace(/([A-Z\d]+)([A-Z][a-z])/g, "$1_$2");
+      word = word.replace(/([a-z\d])([A-Z])/g, "$1_$2");
+      word = word.replace('-', '_');
+      return word = word.toLowerCase();
+    };
+
+    Inflections.prototype.humanize = function(lower_case_and_underscored_word) {
+      var human, replacement, rule, word, _i, _len, _ref,
+        _this = this;
+      word = lower_case_and_underscored_word;
+      _ref = this.humans;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        human = _ref[_i];
+        rule = human[0];
+        replacement = human[1];
+        if (((rule.test != null) && rule.test(word)) || ((rule.indexOf != null) && word.indexOf(rule) >= 0)) {
+          word = word.replace(rule, replacement);
+          break;
+        }
+      }
+      word = word.replace(/_id$/g, '');
+      word = word.replace(/_/g, ' ');
+      word = word.replace(/([a-z\d]*)/gi, function(match) {
+        return _this.acronyms[match] || match.toLowerCase();
+      });
+      return word = _.trim(word).replace(/^\w/g, function(match) {
+        return match.toUpperCase();
+      });
+    };
+
+    Inflections.prototype.titleize = function(word) {
+      return this.humanize(this.underscore(word)).replace(/([\s¿]+)([a-z])/g, function(match, boundary, letter, idx, string) {
+        return match.replace(letter, letter.toUpperCase());
+      });
+    };
+
+    Inflections.prototype.apply_inflections = function(word, rules) {
+      var capture, match, regex, result, rule, _i, _len;
+      if (!word) {
+        return word;
+      } else {
+        result = word;
+        match = result.toLowerCase().match(/\b\w+$/);
+        if (match && _.indexOf(this.uncountables, match[0]) !== -1) {
+          return result;
+        } else {
+          for (_i = 0, _len = rules.length; _i < _len; _i++) {
+            rule = rules[_i];
+            regex = rule[0], capture = rule[1];
+            if (result.match(regex)) {
+              result = result.replace(regex, capture);
+              break;
+            }
+          }
+          return result;
+        }
+      }
+    };
+
+    return Inflections;
+
+  })();
+
+  root = typeof exports !== "undefined" && exports !== null ? exports : this;
+
+  _ = root._ || require('underscore');
+
+  if (typeof require !== "undefined" && require !== null) {
+    _.str = require('underscore.string');
+    _.mixin(_.str.exports());
+    _.str.include('Underscore.string', 'string');
+  } else {
+    _.mixin(_.str.exports());
+  }
+
+  if (typeof exports === 'undefined') {
+    _.mixin(new Inflections);
+  } else {
+    module.exports = new Inflections;
+  }
+
+}).call(this);
+
+},{"underscore":24,"underscore.string":23}],23:[function(require,module,exports){
+//  Underscore.string
+//  (c) 2010 Esa-Matti Suuronen <esa-matti aet suuronen dot org>
+//  Underscore.string is freely distributable under the terms of the MIT license.
+//  Documentation: https://github.com/epeli/underscore.string
+//  Some code is borrowed from MooTools and Alexandru Marasteanu.
+//  Version '2.3.2'
+
+!function(root, String){
+  'use strict';
+
+  // Defining helper functions.
+
+  var nativeTrim = String.prototype.trim;
+  var nativeTrimRight = String.prototype.trimRight;
+  var nativeTrimLeft = String.prototype.trimLeft;
+
+  var parseNumber = function(source) { return source * 1 || 0; };
+
+  var strRepeat = function(str, qty){
+    if (qty < 1) return '';
+    var result = '';
+    while (qty > 0) {
+      if (qty & 1) result += str;
+      qty >>= 1, str += str;
+    }
+    return result;
+  };
+
+  var slice = [].slice;
+
+  var defaultToWhiteSpace = function(characters) {
+    if (characters == null)
+      return '\\s';
+    else if (characters.source)
+      return characters.source;
+    else
+      return '[' + _s.escapeRegExp(characters) + ']';
+  };
+
+  // Helper for toBoolean
+  function boolMatch(s, matchers) {
+    var i, matcher, down = s.toLowerCase();
+    matchers = [].concat(matchers);
+    for (i = 0; i < matchers.length; i += 1) {
+      matcher = matchers[i];
+      if (!matcher) continue;
+      if (matcher.test && matcher.test(s)) return true;
+      if (matcher.toLowerCase() === down) return true;
+    }
+  }
+
+  var escapeChars = {
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    amp: '&',
+    apos: "'"
+  };
+
+  var reversedEscapeChars = {};
+  for(var key in escapeChars) reversedEscapeChars[escapeChars[key]] = key;
+  reversedEscapeChars["'"] = '#39';
+
+  // sprintf() for JavaScript 0.7-beta1
+  // http://www.diveintojavascript.com/projects/javascript-sprintf
+  //
+  // Copyright (c) Alexandru Marasteanu <alexaholic [at) gmail (dot] com>
+  // All rights reserved.
+
+  var sprintf = (function() {
+    function get_type(variable) {
+      return Object.prototype.toString.call(variable).slice(8, -1).toLowerCase();
+    }
+
+    var str_repeat = strRepeat;
+
+    var str_format = function() {
+      if (!str_format.cache.hasOwnProperty(arguments[0])) {
+        str_format.cache[arguments[0]] = str_format.parse(arguments[0]);
+      }
+      return str_format.format.call(null, str_format.cache[arguments[0]], arguments);
+    };
+
+    str_format.format = function(parse_tree, argv) {
+      var cursor = 1, tree_length = parse_tree.length, node_type = '', arg, output = [], i, k, match, pad, pad_character, pad_length;
+      for (i = 0; i < tree_length; i++) {
+        node_type = get_type(parse_tree[i]);
+        if (node_type === 'string') {
+          output.push(parse_tree[i]);
+        }
+        else if (node_type === 'array') {
+          match = parse_tree[i]; // convenience purposes only
+          if (match[2]) { // keyword argument
+            arg = argv[cursor];
+            for (k = 0; k < match[2].length; k++) {
+              if (!arg.hasOwnProperty(match[2][k])) {
+                throw new Error(sprintf('[_.sprintf] property "%s" does not exist', match[2][k]));
+              }
+              arg = arg[match[2][k]];
+            }
+          } else if (match[1]) { // positional argument (explicit)
+            arg = argv[match[1]];
+          }
+          else { // positional argument (implicit)
+            arg = argv[cursor++];
+          }
+
+          if (/[^s]/.test(match[8]) && (get_type(arg) != 'number')) {
+            throw new Error(sprintf('[_.sprintf] expecting number but found %s', get_type(arg)));
+          }
+          switch (match[8]) {
+            case 'b': arg = arg.toString(2); break;
+            case 'c': arg = String.fromCharCode(arg); break;
+            case 'd': arg = parseInt(arg, 10); break;
+            case 'e': arg = match[7] ? arg.toExponential(match[7]) : arg.toExponential(); break;
+            case 'f': arg = match[7] ? parseFloat(arg).toFixed(match[7]) : parseFloat(arg); break;
+            case 'o': arg = arg.toString(8); break;
+            case 's': arg = ((arg = String(arg)) && match[7] ? arg.substring(0, match[7]) : arg); break;
+            case 'u': arg = Math.abs(arg); break;
+            case 'x': arg = arg.toString(16); break;
+            case 'X': arg = arg.toString(16).toUpperCase(); break;
+          }
+          arg = (/[def]/.test(match[8]) && match[3] && arg >= 0 ? '+'+ arg : arg);
+          pad_character = match[4] ? match[4] == '0' ? '0' : match[4].charAt(1) : ' ';
+          pad_length = match[6] - String(arg).length;
+          pad = match[6] ? str_repeat(pad_character, pad_length) : '';
+          output.push(match[5] ? arg + pad : pad + arg);
+        }
+      }
+      return output.join('');
+    };
+
+    str_format.cache = {};
+
+    str_format.parse = function(fmt) {
+      var _fmt = fmt, match = [], parse_tree = [], arg_names = 0;
+      while (_fmt) {
+        if ((match = /^[^\x25]+/.exec(_fmt)) !== null) {
+          parse_tree.push(match[0]);
+        }
+        else if ((match = /^\x25{2}/.exec(_fmt)) !== null) {
+          parse_tree.push('%');
+        }
+        else if ((match = /^\x25(?:([1-9]\d*)\$|\(([^\)]+)\))?(\+)?(0|'[^$])?(-)?(\d+)?(?:\.(\d+))?([b-fosuxX])/.exec(_fmt)) !== null) {
+          if (match[2]) {
+            arg_names |= 1;
+            var field_list = [], replacement_field = match[2], field_match = [];
+            if ((field_match = /^([a-z_][a-z_\d]*)/i.exec(replacement_field)) !== null) {
+              field_list.push(field_match[1]);
+              while ((replacement_field = replacement_field.substring(field_match[0].length)) !== '') {
+                if ((field_match = /^\.([a-z_][a-z_\d]*)/i.exec(replacement_field)) !== null) {
+                  field_list.push(field_match[1]);
+                }
+                else if ((field_match = /^\[(\d+)\]/.exec(replacement_field)) !== null) {
+                  field_list.push(field_match[1]);
+                }
+                else {
+                  throw new Error('[_.sprintf] huh?');
+                }
+              }
+            }
+            else {
+              throw new Error('[_.sprintf] huh?');
+            }
+            match[2] = field_list;
+          }
+          else {
+            arg_names |= 2;
+          }
+          if (arg_names === 3) {
+            throw new Error('[_.sprintf] mixing positional and named placeholders is not (yet) supported');
+          }
+          parse_tree.push(match);
+        }
+        else {
+          throw new Error('[_.sprintf] huh?');
+        }
+        _fmt = _fmt.substring(match[0].length);
+      }
+      return parse_tree;
+    };
+
+    return str_format;
+  })();
+
+
+
+  // Defining underscore.string
+
+  var _s = {
+
+    VERSION: '2.3.0',
+
+    isBlank: function(str){
+      if (str == null) str = '';
+      return (/^\s*$/).test(str);
+    },
+
+    stripTags: function(str){
+      if (str == null) return '';
+      return String(str).replace(/<\/?[^>]+>/g, '');
+    },
+
+    capitalize : function(str){
+      str = str == null ? '' : String(str);
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    },
+
+    chop: function(str, step){
+      if (str == null) return [];
+      str = String(str);
+      step = ~~step;
+      return step > 0 ? str.match(new RegExp('.{1,' + step + '}', 'g')) : [str];
+    },
+
+    clean: function(str){
+      return _s.strip(str).replace(/\s+/g, ' ');
+    },
+
+    count: function(str, substr){
+      if (str == null || substr == null) return 0;
+
+      str = String(str);
+      substr = String(substr);
+
+      var count = 0,
+        pos = 0,
+        length = substr.length;
+
+      while (true) {
+        pos = str.indexOf(substr, pos);
+        if (pos === -1) break;
+        count++;
+        pos += length;
+      }
+
+      return count;
+    },
+
+    chars: function(str) {
+      if (str == null) return [];
+      return String(str).split('');
+    },
+
+    swapCase: function(str) {
+      if (str == null) return '';
+      return String(str).replace(/\S/g, function(c){
+        return c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase();
+      });
+    },
+
+    escapeHTML: function(str) {
+      if (str == null) return '';
+      return String(str).replace(/[&<>"']/g, function(m){ return '&' + reversedEscapeChars[m] + ';'; });
+    },
+
+    unescapeHTML: function(str) {
+      if (str == null) return '';
+      return String(str).replace(/\&([^;]+);/g, function(entity, entityCode){
+        var match;
+
+        if (entityCode in escapeChars) {
+          return escapeChars[entityCode];
+        } else if (match = entityCode.match(/^#x([\da-fA-F]+)$/)) {
+          return String.fromCharCode(parseInt(match[1], 16));
+        } else if (match = entityCode.match(/^#(\d+)$/)) {
+          return String.fromCharCode(~~match[1]);
+        } else {
+          return entity;
+        }
+      });
+    },
+
+    escapeRegExp: function(str){
+      if (str == null) return '';
+      return String(str).replace(/([.*+?^=!:${}()|[\]\/\\])/g, '\\$1');
+    },
+
+    splice: function(str, i, howmany, substr){
+      var arr = _s.chars(str);
+      arr.splice(~~i, ~~howmany, substr);
+      return arr.join('');
+    },
+
+    insert: function(str, i, substr){
+      return _s.splice(str, i, 0, substr);
+    },
+
+    include: function(str, needle){
+      if (needle === '') return true;
+      if (str == null) return false;
+      return String(str).indexOf(needle) !== -1;
+    },
+
+    join: function() {
+      var args = slice.call(arguments),
+        separator = args.shift();
+
+      if (separator == null) separator = '';
+
+      return args.join(separator);
+    },
+
+    lines: function(str) {
+      if (str == null) return [];
+      return String(str).split("\n");
+    },
+
+    reverse: function(str){
+      return _s.chars(str).reverse().join('');
+    },
+
+    startsWith: function(str, starts){
+      if (starts === '') return true;
+      if (str == null || starts == null) return false;
+      str = String(str); starts = String(starts);
+      return str.length >= starts.length && str.slice(0, starts.length) === starts;
+    },
+
+    endsWith: function(str, ends){
+      if (ends === '') return true;
+      if (str == null || ends == null) return false;
+      str = String(str); ends = String(ends);
+      return str.length >= ends.length && str.slice(str.length - ends.length) === ends;
+    },
+
+    succ: function(str){
+      if (str == null) return '';
+      str = String(str);
+      return str.slice(0, -1) + String.fromCharCode(str.charCodeAt(str.length-1) + 1);
+    },
+
+    titleize: function(str){
+      if (str == null) return '';
+      str  = String(str).toLowerCase();
+      return str.replace(/(?:^|\s|-)\S/g, function(c){ return c.toUpperCase(); });
+    },
+
+    camelize: function(str){
+      return _s.trim(str).replace(/[-_\s]+(.)?/g, function(match, c){ return c ? c.toUpperCase() : ""; });
+    },
+
+    underscored: function(str){
+      return _s.trim(str).replace(/([a-z\d])([A-Z]+)/g, '$1_$2').replace(/[-\s]+/g, '_').toLowerCase();
+    },
+
+    dasherize: function(str){
+      return _s.trim(str).replace(/([A-Z])/g, '-$1').replace(/[-_\s]+/g, '-').toLowerCase();
+    },
+
+    classify: function(str){
+      return _s.titleize(String(str).replace(/[\W_]/g, ' ')).replace(/\s/g, '');
+    },
+
+    humanize: function(str){
+      return _s.capitalize(_s.underscored(str).replace(/_id$/,'').replace(/_/g, ' '));
+    },
+
+    trim: function(str, characters){
+      if (str == null) return '';
+      if (!characters && nativeTrim) return nativeTrim.call(str);
+      characters = defaultToWhiteSpace(characters);
+      return String(str).replace(new RegExp('\^' + characters + '+|' + characters + '+$', 'g'), '');
+    },
+
+    ltrim: function(str, characters){
+      if (str == null) return '';
+      if (!characters && nativeTrimLeft) return nativeTrimLeft.call(str);
+      characters = defaultToWhiteSpace(characters);
+      return String(str).replace(new RegExp('^' + characters + '+'), '');
+    },
+
+    rtrim: function(str, characters){
+      if (str == null) return '';
+      if (!characters && nativeTrimRight) return nativeTrimRight.call(str);
+      characters = defaultToWhiteSpace(characters);
+      return String(str).replace(new RegExp(characters + '+$'), '');
+    },
+
+    truncate: function(str, length, truncateStr){
+      if (str == null) return '';
+      str = String(str); truncateStr = truncateStr || '...';
+      length = ~~length;
+      return str.length > length ? str.slice(0, length) + truncateStr : str;
+    },
+
+    /**
+     * _s.prune: a more elegant version of truncate
+     * prune extra chars, never leaving a half-chopped word.
+     * @author github.com/rwz
+     */
+    prune: function(str, length, pruneStr){
+      if (str == null) return '';
+
+      str = String(str); length = ~~length;
+      pruneStr = pruneStr != null ? String(pruneStr) : '...';
+
+      if (str.length <= length) return str;
+
+      var tmpl = function(c){ return c.toUpperCase() !== c.toLowerCase() ? 'A' : ' '; },
+        template = str.slice(0, length+1).replace(/.(?=\W*\w*$)/g, tmpl); // 'Hello, world' -> 'HellAA AAAAA'
+
+      if (template.slice(template.length-2).match(/\w\w/))
+        template = template.replace(/\s*\S+$/, '');
+      else
+        template = _s.rtrim(template.slice(0, template.length-1));
+
+      return (template+pruneStr).length > str.length ? str : str.slice(0, template.length)+pruneStr;
+    },
+
+    words: function(str, delimiter) {
+      if (_s.isBlank(str)) return [];
+      return _s.trim(str, delimiter).split(delimiter || /\s+/);
+    },
+
+    pad: function(str, length, padStr, type) {
+      str = str == null ? '' : String(str);
+      length = ~~length;
+
+      var padlen  = 0;
+
+      if (!padStr)
+        padStr = ' ';
+      else if (padStr.length > 1)
+        padStr = padStr.charAt(0);
+
+      switch(type) {
+        case 'right':
+          padlen = length - str.length;
+          return str + strRepeat(padStr, padlen);
+        case 'both':
+          padlen = length - str.length;
+          return strRepeat(padStr, Math.ceil(padlen/2)) + str
+                  + strRepeat(padStr, Math.floor(padlen/2));
+        default: // 'left'
+          padlen = length - str.length;
+          return strRepeat(padStr, padlen) + str;
+        }
+    },
+
+    lpad: function(str, length, padStr) {
+      return _s.pad(str, length, padStr);
+    },
+
+    rpad: function(str, length, padStr) {
+      return _s.pad(str, length, padStr, 'right');
+    },
+
+    lrpad: function(str, length, padStr) {
+      return _s.pad(str, length, padStr, 'both');
+    },
+
+    sprintf: sprintf,
+
+    vsprintf: function(fmt, argv){
+      argv.unshift(fmt);
+      return sprintf.apply(null, argv);
+    },
+
+    toNumber: function(str, decimals) {
+      if (!str) return 0;
+      str = _s.trim(str);
+      if (!str.match(/^-?\d+(?:\.\d+)?$/)) return NaN;
+      return parseNumber(parseNumber(str).toFixed(~~decimals));
+    },
+
+    numberFormat : function(number, dec, dsep, tsep) {
+      if (isNaN(number) || number == null) return '';
+
+      number = number.toFixed(~~dec);
+      tsep = typeof tsep == 'string' ? tsep : ',';
+
+      var parts = number.split('.'), fnums = parts[0],
+        decimals = parts[1] ? (dsep || '.') + parts[1] : '';
+
+      return fnums.replace(/(\d)(?=(?:\d{3})+$)/g, '$1' + tsep) + decimals;
+    },
+
+    strRight: function(str, sep){
+      if (str == null) return '';
+      str = String(str); sep = sep != null ? String(sep) : sep;
+      var pos = !sep ? -1 : str.indexOf(sep);
+      return ~pos ? str.slice(pos+sep.length, str.length) : str;
+    },
+
+    strRightBack: function(str, sep){
+      if (str == null) return '';
+      str = String(str); sep = sep != null ? String(sep) : sep;
+      var pos = !sep ? -1 : str.lastIndexOf(sep);
+      return ~pos ? str.slice(pos+sep.length, str.length) : str;
+    },
+
+    strLeft: function(str, sep){
+      if (str == null) return '';
+      str = String(str); sep = sep != null ? String(sep) : sep;
+      var pos = !sep ? -1 : str.indexOf(sep);
+      return ~pos ? str.slice(0, pos) : str;
+    },
+
+    strLeftBack: function(str, sep){
+      if (str == null) return '';
+      str += ''; sep = sep != null ? ''+sep : sep;
+      var pos = str.lastIndexOf(sep);
+      return ~pos ? str.slice(0, pos) : str;
+    },
+
+    toSentence: function(array, separator, lastSeparator, serial) {
+      separator = separator || ', ';
+      lastSeparator = lastSeparator || ' and ';
+      var a = array.slice(), lastMember = a.pop();
+
+      if (array.length > 2 && serial) lastSeparator = _s.rtrim(separator) + lastSeparator;
+
+      return a.length ? a.join(separator) + lastSeparator + lastMember : lastMember;
+    },
+
+    toSentenceSerial: function() {
+      var args = slice.call(arguments);
+      args[3] = true;
+      return _s.toSentence.apply(_s, args);
+    },
+
+    slugify: function(str) {
+      if (str == null) return '';
+
+      var from  = "ąàáäâãåæăćęèéëêìíïîłńòóöôõøśșțùúüûñçżź",
+          to    = "aaaaaaaaaceeeeeiiiilnoooooosstuuuunczz",
+          regex = new RegExp(defaultToWhiteSpace(from), 'g');
+
+      str = String(str).toLowerCase().replace(regex, function(c){
+        var index = from.indexOf(c);
+        return to.charAt(index) || '-';
+      });
+
+      return _s.dasherize(str.replace(/[^\w\s-]/g, ''));
+    },
+
+    surround: function(str, wrapper) {
+      return [wrapper, str, wrapper].join('');
+    },
+
+    quote: function(str, quoteChar) {
+      return _s.surround(str, quoteChar || '"');
+    },
+
+    unquote: function(str, quoteChar) {
+      quoteChar = quoteChar || '"';
+      if (str[0] === quoteChar && str[str.length-1] === quoteChar)
+        return str.slice(1,str.length-1);
+      else return str;
+    },
+
+    exports: function() {
+      var result = {};
+
+      for (var prop in this) {
+        if (!this.hasOwnProperty(prop) || prop.match(/^(?:include|contains|reverse)$/)) continue;
+        result[prop] = this[prop];
+      }
+
+      return result;
+    },
+
+    repeat: function(str, qty, separator){
+      if (str == null) return '';
+
+      qty = ~~qty;
+
+      // using faster implementation if separator is not needed;
+      if (separator == null) return strRepeat(String(str), qty);
+
+      // this one is about 300x slower in Google Chrome
+      for (var repeat = []; qty > 0; repeat[--qty] = str) {}
+      return repeat.join(separator);
+    },
+
+    naturalCmp: function(str1, str2){
+      if (str1 == str2) return 0;
+      if (!str1) return -1;
+      if (!str2) return 1;
+
+      var cmpRegex = /(\.\d+)|(\d+)|(\D+)/g,
+        tokens1 = String(str1).toLowerCase().match(cmpRegex),
+        tokens2 = String(str2).toLowerCase().match(cmpRegex),
+        count = Math.min(tokens1.length, tokens2.length);
+
+      for(var i = 0; i < count; i++) {
+        var a = tokens1[i], b = tokens2[i];
+
+        if (a !== b){
+          var num1 = parseInt(a, 10);
+          if (!isNaN(num1)){
+            var num2 = parseInt(b, 10);
+            if (!isNaN(num2) && num1 - num2)
+              return num1 - num2;
+          }
+          return a < b ? -1 : 1;
+        }
+      }
+
+      if (tokens1.length === tokens2.length)
+        return tokens1.length - tokens2.length;
+
+      return str1 < str2 ? -1 : 1;
+    },
+
+    levenshtein: function(str1, str2) {
+      if (str1 == null && str2 == null) return 0;
+      if (str1 == null) return String(str2).length;
+      if (str2 == null) return String(str1).length;
+
+      str1 = String(str1); str2 = String(str2);
+
+      var current = [], prev, value;
+
+      for (var i = 0; i <= str2.length; i++)
+        for (var j = 0; j <= str1.length; j++) {
+          if (i && j)
+            if (str1.charAt(j - 1) === str2.charAt(i - 1))
+              value = prev;
+            else
+              value = Math.min(current[j], current[j - 1], prev) + 1;
+          else
+            value = i + j;
+
+          prev = current[j];
+          current[j] = value;
+        }
+
+      return current.pop();
+    },
+
+    toBoolean: function(str, trueValues, falseValues) {
+      if (typeof str === "number") str = "" + str;
+      if (typeof str !== "string") return !!str;
+      str = _s.trim(str);
+      if (boolMatch(str, trueValues || ["true", "1"])) return true;
+      if (boolMatch(str, falseValues || ["false", "0"])) return false;
+    }
+  };
+
+  // Aliases
+
+  _s.strip    = _s.trim;
+  _s.lstrip   = _s.ltrim;
+  _s.rstrip   = _s.rtrim;
+  _s.center   = _s.lrpad;
+  _s.rjust    = _s.lpad;
+  _s.ljust    = _s.rpad;
+  _s.contains = _s.include;
+  _s.q        = _s.quote;
+  _s.toBool   = _s.toBoolean;
+
+  // Exporting
+
+  // CommonJS module is defined
+  if (typeof exports !== 'undefined') {
+    if (typeof module !== 'undefined' && module.exports)
+      module.exports = _s;
+
+    exports._s = _s;
+  }
+
+  // Register as a named module with AMD.
+  if (typeof define === 'function' && define.amd)
+    define('underscore.string', [], function(){ return _s; });
+
+
+  // Integrate with Underscore.js if defined
+  // or create our own underscore object.
+  root._ = root._ || {};
+  root._.string = root._.str = _s;
+}(this, String);
+
+},{}],24:[function(require,module,exports){
 //     Underscore.js 1.5.2
 //     http://underscorejs.org
 //     (c) 2009-2013 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -13133,964 +14284,6 @@ return jQuery;
 
 }).call(this);
 
-},{}],22:[function(require,module,exports){
-// Generated by CoffeeScript 1.6.3
-(function() {
-  var Inflections, root, _,
-    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
-    __slice = [].slice;
-
-  Inflections = (function() {
-    Inflections.prototype.defaultUncountables = ['equipment', 'information', 'rice', 'money', 'species', 'series', 'fish', 'sheep', 'jeans', 'moose', 'deer', 'news', 'music'];
-
-    Inflections.prototype.defaultPluralRules = [[/$/, 's'], [/s$/i, 's'], [/^(ax|test)is$/i, '$1es'], [/(octop|vir)us$/i, '$1i'], [/(octop|vir)i$/i, '$1i'], [/(alias|status)$/i, '$1es'], [/(bu)s$/i, '$1ses'], [/(buffal|tomat)o$/i, '$1oes'], [/([ti])um$/i, '$1a'], [/([ti])a$/i, '$1a'], [/sis$/i, 'ses'], [/(?:([^f])fe|([lr])f)$/i, '$1$2ves'], [/(hive)$/i, '$1s'], [/([^aeiouy]|qu)y$/i, '$1ies'], [/(x|ch|ss|sh)$/i, '$1es'], [/(matr|vert|ind)(?:ix|ex)$/i, '$1ices'], [/(m|l)ouse$/i, '$1ice'], [/(m|l)ice$/i, '$1ice'], [/^(ox)$/i, '$1en'], [/^(oxen)$/i, '$1'], [/(quiz)$/i, '$1zes']];
-
-    Inflections.prototype.defaultSingularRules = [[/s$/i, ''], [/(ss)$/i, '$1'], [/(n)ews$/i, '$1ews'], [/([ti])a$/i, '$1um'], [/((a)naly|(b)a|(d)iagno|(p)arenthe|(p)rogno|(s)ynop|(t)he)(sis|ses)$/i, '$1$2sis'], [/(^analy)(sis|ses)$/i, '$1sis'], [/([^f])ves$/i, '$1fe'], [/(hive)s$/i, '$1'], [/(tive)s$/i, '$1'], [/([lr])ves$/i, '$1f'], [/([^aeiouy]|qu)ies$/i, '$1y'], [/(s)eries$/i, '$1eries'], [/(m)ovies$/i, '$1ovie'], [/(x|ch|ss|sh)es$/i, '$1'], [/(m|l)ice$/i, '$1ouse'], [/(bus)(es)?$/i, '$1'], [/(o)es$/i, '$1'], [/(shoe)s$/i, '$1'], [/(cris|test)(is|es)$/i, '$1is'], [/^(a)x[ie]s$/i, '$1xis'], [/(octop|vir)(us|i)$/i, '$1us'], [/(alias|status)(es)?$/i, '$1'], [/^(ox)en/i, '$1'], [/(vert|ind)ices$/i, '$1ex'], [/(matr)ices$/i, '$1ix'], [/(quiz)zes$/i, '$1'], [/(database)s$/i, '$1']];
-
-    Inflections.prototype.defaultIrregularRules = [['person', 'people'], ['man', 'men'], ['child', 'children'], ['sex', 'sexes'], ['move', 'moves'], ['cow', 'kine'], ['zombie', 'zombies']];
-
-    Inflections.prototype.defaultHumanRules = [];
-
-    function Inflections() {
-      this.apply_inflections = __bind(this.apply_inflections, this);
-
-      this.titleize = __bind(this.titleize, this);
-      this.humanize = __bind(this.humanize, this);
-      this.underscore = __bind(this.underscore, this);
-      this.camelize = __bind(this.camelize, this);
-      this.singularize = __bind(this.singularize, this);
-
-      this.pluralize = __bind(this.pluralize, this);
-
-      this.clearInflections = __bind(this.clearInflections, this);
-
-      this.human = __bind(this.human, this);
-      this.uncountable = __bind(this.uncountable, this);
-
-      this.irregular = __bind(this.irregular, this);
-
-      this.singular = __bind(this.singular, this);
-
-      this.plural = __bind(this.plural, this);
-
-      this.acronym = __bind(this.acronym, this);
-      this.applyDefaultPlurals = __bind(this.applyDefaultPlurals, this);
-
-      this.applyDefaultUncountables = __bind(this.applyDefaultUncountables, this);
-
-      this.applyDefaultRules = __bind(this.applyDefaultRules, this);
-      this.plurals = [];
-      this.singulars = [];
-      this.uncountables = [];
-      this.humans = [];
-      this.acronyms = {};
-      this.applyDefaultRules();
-    }
-
-    Inflections.prototype.applyDefaultRules = function() {
-      this.applyDefaultUncountables();
-      this.applyDefaultPlurals();
-      this.applyDefaultSingulars();
-      return this.applyDefaultIrregulars();
-    };
-
-    Inflections.prototype.applyDefaultUncountables = function() {
-      return this.uncountable(this.defaultUncountables);
-    };
-
-    Inflections.prototype.applyDefaultPlurals = function() {
-      var _this = this;
-      return _.each(this.defaultPluralRules, function(rule) {
-        var capture, regex;
-        regex = rule[0], capture = rule[1];
-        return _this.plural(regex, capture);
-      });
-    };
-
-    Inflections.prototype.applyDefaultSingulars = function() {
-      var _this = this;
-      return _.each(this.defaultSingularRules, function(rule) {
-        var capture, regex;
-        regex = rule[0], capture = rule[1];
-        return _this.singular(regex, capture);
-      });
-    };
-
-    Inflections.prototype.applyDefaultIrregulars = function() {
-      var _this = this;
-      return _.each(this.defaultIrregularRules, function(rule) {
-        var plural, singular;
-        singular = rule[0], plural = rule[1];
-        return _this.irregular(singular, plural);
-      });
-    };
-
-    Inflections.prototype.acronym = function(word) {
-      this.acronyms[word.toLowerCase()] = word;
-      return this.acronym_matchers = _.values(this.acronyms).join("|");
-    };
-
-    Inflections.prototype.plural = function(rule, replacement) {
-      if (typeof rule === 'string') {
-        delete this.uncountables[_.indexOf(this.uncountables, rule)];
-      }
-      delete this.uncountables[_.indexOf(this.uncountables, replacement)];
-      return this.plurals.unshift([rule, replacement]);
-    };
-
-    Inflections.prototype.singular = function(rule, replacement) {
-      if (typeof rule === 'string') {
-        delete this.uncountables[_.indexOf(this.uncountables, rule)];
-      }
-      delete this.uncountables[_.indexOf(this.uncountables, replacement)];
-      return this.singulars.unshift([rule, replacement]);
-    };
-
-    Inflections.prototype.irregular = function(singular, plural) {
-      delete this.uncountables[_.indexOf(this.uncountables, singular)];
-      delete this.uncountables[_.indexOf(this.uncountables, plural)];
-      if (singular.substring(0, 1).toUpperCase() === plural.substring(0, 1).toUpperCase()) {
-        this.plural(new RegExp("(" + (singular.substring(0, 1)) + ")" + (singular.substring(1, plural.length)) + "$", "i"), '$1' + plural.substring(1, plural.length));
-        this.plural(new RegExp("(" + (plural.substring(0, 1)) + ")" + (plural.substring(1, plural.length)) + "$", "i"), '$1' + plural.substring(1, plural.length));
-        return this.singular(new RegExp("(" + (plural.substring(0, 1)) + ")" + (plural.substring(1, plural.length)) + "$", "i"), '$1' + singular.substring(1, plural.length));
-      } else {
-        this.plural(new RegExp("" + (singular.substring(0, 1)) + (singular.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
-        this.plural(new RegExp("" + (singular.substring(0, 1)) + (singular.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
-        this.plural(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
-        this.plural(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), plural.substring(0, 1) + plural.substring(1, plural.length));
-        this.singular(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), singular.substring(0, 1) + singular.substring(1, plural.length));
-        return this.singular(new RegExp("" + (plural.substring(0, 1)) + (plural.substring(1, plural.length)) + "$", "i"), singular.substring(0, 1) + singular.substring(1, plural.length));
-      }
-    };
-
-    Inflections.prototype.uncountable = function() {
-      var words;
-      words = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-      this.uncountables.push(words);
-      return this.uncountables = _.flatten(this.uncountables);
-    };
-
-    Inflections.prototype.human = function(rule, replacement) {
-      return this.humans.unshift([rule, replacement]);
-    };
-
-    Inflections.prototype.clearInflections = function(scope) {
-      if (scope == null) {
-        scope = 'all';
-      }
-      return this[scope] = [];
-    };
-
-    Inflections.prototype.pluralize = function(word, count, options) {
-      var result, _ref;
-      if (options == null) {
-        options = {};
-      }
-      options = _.extend({
-        plural: void 0,
-        showNumber: true
-      }, options);
-      if (count !== void 0) {
-        result = "";
-        if (options.showNumber === true) {
-          result += "" + (count != null ? count : 0) + " ";
-        }
-        return result += count === 1 || (count != null ? typeof count.toString === "function" ? count.toString().match(/^1(\.0+)?$/) : void 0 : void 0) ? word : (_ref = options.plural) != null ? _ref : this.pluralize(word);
-      } else {
-        return this.apply_inflections(word, this.plurals);
-      }
-    };
-
-    Inflections.prototype.singularize = function(word) {
-      return this.apply_inflections(word, this.singulars);
-    };
-
-    Inflections.prototype.camelize = function(term, uppercase_first_letter) {
-      var _this = this;
-      if (uppercase_first_letter == null) {
-        uppercase_first_letter = true;
-      }
-      if (uppercase_first_letter) {
-        term = term.replace(/^[a-z\d]*/, function(a) {
-          return _this.acronyms[a] || _.capitalize(a);
-        });
-      } else {
-        term = term.replace(RegExp("^(?:" + this.acronym_matchers + "(?=\\b|[A-Z_])|\\w)"), function(a) {
-          return a.toLowerCase();
-        });
-      }
-      return term = term.replace(/(?:_|(\/))([a-z\d]*)/gi, function(match, $1, $2, idx, string) {
-        $1 || ($1 = '');
-        return "" + $1 + (_this.acronyms[$2] || _.capitalize($2));
-      });
-    };
-
-    Inflections.prototype.underscore = function(camel_cased_word) {
-      var word;
-      word = camel_cased_word;
-      word = word.replace(RegExp("(?:([A-Za-z\\d])|^)(" + this.acronym_matchers + ")(?=\\b|[^a-z])", "g"), function(match, $1, $2) {
-        return "" + ($1 || '') + ($1 ? '_' : '') + ($2.toLowerCase());
-      });
-      word = word.replace(/([A-Z\d]+)([A-Z][a-z])/g, "$1_$2");
-      word = word.replace(/([a-z\d])([A-Z])/g, "$1_$2");
-      word = word.replace('-', '_');
-      return word = word.toLowerCase();
-    };
-
-    Inflections.prototype.humanize = function(lower_case_and_underscored_word) {
-      var human, replacement, rule, word, _i, _len, _ref,
-        _this = this;
-      word = lower_case_and_underscored_word;
-      _ref = this.humans;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        human = _ref[_i];
-        rule = human[0];
-        replacement = human[1];
-        if (((rule.test != null) && rule.test(word)) || ((rule.indexOf != null) && word.indexOf(rule) >= 0)) {
-          word = word.replace(rule, replacement);
-          break;
-        }
-      }
-      word = word.replace(/_id$/g, '');
-      word = word.replace(/_/g, ' ');
-      word = word.replace(/([a-z\d]*)/gi, function(match) {
-        return _this.acronyms[match] || match.toLowerCase();
-      });
-      return word = _.trim(word).replace(/^\w/g, function(match) {
-        return match.toUpperCase();
-      });
-    };
-
-    Inflections.prototype.titleize = function(word) {
-      return this.humanize(this.underscore(word)).replace(/([\s¿]+)([a-z])/g, function(match, boundary, letter, idx, string) {
-        return match.replace(letter, letter.toUpperCase());
-      });
-    };
-
-    Inflections.prototype.apply_inflections = function(word, rules) {
-      var capture, match, regex, result, rule, _i, _len;
-      if (!word) {
-        return word;
-      } else {
-        result = word;
-        match = result.toLowerCase().match(/\b\w+$/);
-        if (match && _.indexOf(this.uncountables, match[0]) !== -1) {
-          return result;
-        } else {
-          for (_i = 0, _len = rules.length; _i < _len; _i++) {
-            rule = rules[_i];
-            regex = rule[0], capture = rule[1];
-            if (result.match(regex)) {
-              result = result.replace(regex, capture);
-              break;
-            }
-          }
-          return result;
-        }
-      }
-    };
-
-    return Inflections;
-
-  })();
-
-  root = typeof exports !== "undefined" && exports !== null ? exports : this;
-
-  _ = root._ || require('underscore');
-
-  if (typeof require !== "undefined" && require !== null) {
-    _.str = require('underscore.string');
-    _.mixin(_.str.exports());
-    _.str.include('Underscore.string', 'string');
-  } else {
-    _.mixin(_.str.exports());
-  }
-
-  if (typeof exports === 'undefined') {
-    _.mixin(new Inflections);
-  } else {
-    module.exports = new Inflections;
-  }
-
-}).call(this);
-
-},{"underscore":24,"underscore.string":23}],23:[function(require,module,exports){
-//  Underscore.string
-//  (c) 2010 Esa-Matti Suuronen <esa-matti aet suuronen dot org>
-//  Underscore.string is freely distributable under the terms of the MIT license.
-//  Documentation: https://github.com/epeli/underscore.string
-//  Some code is borrowed from MooTools and Alexandru Marasteanu.
-//  Version '2.3.2'
-
-!function(root, String){
-  'use strict';
-
-  // Defining helper functions.
-
-  var nativeTrim = String.prototype.trim;
-  var nativeTrimRight = String.prototype.trimRight;
-  var nativeTrimLeft = String.prototype.trimLeft;
-
-  var parseNumber = function(source) { return source * 1 || 0; };
-
-  var strRepeat = function(str, qty){
-    if (qty < 1) return '';
-    var result = '';
-    while (qty > 0) {
-      if (qty & 1) result += str;
-      qty >>= 1, str += str;
-    }
-    return result;
-  };
-
-  var slice = [].slice;
-
-  var defaultToWhiteSpace = function(characters) {
-    if (characters == null)
-      return '\\s';
-    else if (characters.source)
-      return characters.source;
-    else
-      return '[' + _s.escapeRegExp(characters) + ']';
-  };
-
-  // Helper for toBoolean
-  function boolMatch(s, matchers) {
-    var i, matcher, down = s.toLowerCase();
-    matchers = [].concat(matchers);
-    for (i = 0; i < matchers.length; i += 1) {
-      matcher = matchers[i];
-      if (!matcher) continue;
-      if (matcher.test && matcher.test(s)) return true;
-      if (matcher.toLowerCase() === down) return true;
-    }
-  }
-
-  var escapeChars = {
-    lt: '<',
-    gt: '>',
-    quot: '"',
-    amp: '&',
-    apos: "'"
-  };
-
-  var reversedEscapeChars = {};
-  for(var key in escapeChars) reversedEscapeChars[escapeChars[key]] = key;
-  reversedEscapeChars["'"] = '#39';
-
-  // sprintf() for JavaScript 0.7-beta1
-  // http://www.diveintojavascript.com/projects/javascript-sprintf
-  //
-  // Copyright (c) Alexandru Marasteanu <alexaholic [at) gmail (dot] com>
-  // All rights reserved.
-
-  var sprintf = (function() {
-    function get_type(variable) {
-      return Object.prototype.toString.call(variable).slice(8, -1).toLowerCase();
-    }
-
-    var str_repeat = strRepeat;
-
-    var str_format = function() {
-      if (!str_format.cache.hasOwnProperty(arguments[0])) {
-        str_format.cache[arguments[0]] = str_format.parse(arguments[0]);
-      }
-      return str_format.format.call(null, str_format.cache[arguments[0]], arguments);
-    };
-
-    str_format.format = function(parse_tree, argv) {
-      var cursor = 1, tree_length = parse_tree.length, node_type = '', arg, output = [], i, k, match, pad, pad_character, pad_length;
-      for (i = 0; i < tree_length; i++) {
-        node_type = get_type(parse_tree[i]);
-        if (node_type === 'string') {
-          output.push(parse_tree[i]);
-        }
-        else if (node_type === 'array') {
-          match = parse_tree[i]; // convenience purposes only
-          if (match[2]) { // keyword argument
-            arg = argv[cursor];
-            for (k = 0; k < match[2].length; k++) {
-              if (!arg.hasOwnProperty(match[2][k])) {
-                throw new Error(sprintf('[_.sprintf] property "%s" does not exist', match[2][k]));
-              }
-              arg = arg[match[2][k]];
-            }
-          } else if (match[1]) { // positional argument (explicit)
-            arg = argv[match[1]];
-          }
-          else { // positional argument (implicit)
-            arg = argv[cursor++];
-          }
-
-          if (/[^s]/.test(match[8]) && (get_type(arg) != 'number')) {
-            throw new Error(sprintf('[_.sprintf] expecting number but found %s', get_type(arg)));
-          }
-          switch (match[8]) {
-            case 'b': arg = arg.toString(2); break;
-            case 'c': arg = String.fromCharCode(arg); break;
-            case 'd': arg = parseInt(arg, 10); break;
-            case 'e': arg = match[7] ? arg.toExponential(match[7]) : arg.toExponential(); break;
-            case 'f': arg = match[7] ? parseFloat(arg).toFixed(match[7]) : parseFloat(arg); break;
-            case 'o': arg = arg.toString(8); break;
-            case 's': arg = ((arg = String(arg)) && match[7] ? arg.substring(0, match[7]) : arg); break;
-            case 'u': arg = Math.abs(arg); break;
-            case 'x': arg = arg.toString(16); break;
-            case 'X': arg = arg.toString(16).toUpperCase(); break;
-          }
-          arg = (/[def]/.test(match[8]) && match[3] && arg >= 0 ? '+'+ arg : arg);
-          pad_character = match[4] ? match[4] == '0' ? '0' : match[4].charAt(1) : ' ';
-          pad_length = match[6] - String(arg).length;
-          pad = match[6] ? str_repeat(pad_character, pad_length) : '';
-          output.push(match[5] ? arg + pad : pad + arg);
-        }
-      }
-      return output.join('');
-    };
-
-    str_format.cache = {};
-
-    str_format.parse = function(fmt) {
-      var _fmt = fmt, match = [], parse_tree = [], arg_names = 0;
-      while (_fmt) {
-        if ((match = /^[^\x25]+/.exec(_fmt)) !== null) {
-          parse_tree.push(match[0]);
-        }
-        else if ((match = /^\x25{2}/.exec(_fmt)) !== null) {
-          parse_tree.push('%');
-        }
-        else if ((match = /^\x25(?:([1-9]\d*)\$|\(([^\)]+)\))?(\+)?(0|'[^$])?(-)?(\d+)?(?:\.(\d+))?([b-fosuxX])/.exec(_fmt)) !== null) {
-          if (match[2]) {
-            arg_names |= 1;
-            var field_list = [], replacement_field = match[2], field_match = [];
-            if ((field_match = /^([a-z_][a-z_\d]*)/i.exec(replacement_field)) !== null) {
-              field_list.push(field_match[1]);
-              while ((replacement_field = replacement_field.substring(field_match[0].length)) !== '') {
-                if ((field_match = /^\.([a-z_][a-z_\d]*)/i.exec(replacement_field)) !== null) {
-                  field_list.push(field_match[1]);
-                }
-                else if ((field_match = /^\[(\d+)\]/.exec(replacement_field)) !== null) {
-                  field_list.push(field_match[1]);
-                }
-                else {
-                  throw new Error('[_.sprintf] huh?');
-                }
-              }
-            }
-            else {
-              throw new Error('[_.sprintf] huh?');
-            }
-            match[2] = field_list;
-          }
-          else {
-            arg_names |= 2;
-          }
-          if (arg_names === 3) {
-            throw new Error('[_.sprintf] mixing positional and named placeholders is not (yet) supported');
-          }
-          parse_tree.push(match);
-        }
-        else {
-          throw new Error('[_.sprintf] huh?');
-        }
-        _fmt = _fmt.substring(match[0].length);
-      }
-      return parse_tree;
-    };
-
-    return str_format;
-  })();
-
-
-
-  // Defining underscore.string
-
-  var _s = {
-
-    VERSION: '2.3.0',
-
-    isBlank: function(str){
-      if (str == null) str = '';
-      return (/^\s*$/).test(str);
-    },
-
-    stripTags: function(str){
-      if (str == null) return '';
-      return String(str).replace(/<\/?[^>]+>/g, '');
-    },
-
-    capitalize : function(str){
-      str = str == null ? '' : String(str);
-      return str.charAt(0).toUpperCase() + str.slice(1);
-    },
-
-    chop: function(str, step){
-      if (str == null) return [];
-      str = String(str);
-      step = ~~step;
-      return step > 0 ? str.match(new RegExp('.{1,' + step + '}', 'g')) : [str];
-    },
-
-    clean: function(str){
-      return _s.strip(str).replace(/\s+/g, ' ');
-    },
-
-    count: function(str, substr){
-      if (str == null || substr == null) return 0;
-
-      str = String(str);
-      substr = String(substr);
-
-      var count = 0,
-        pos = 0,
-        length = substr.length;
-
-      while (true) {
-        pos = str.indexOf(substr, pos);
-        if (pos === -1) break;
-        count++;
-        pos += length;
-      }
-
-      return count;
-    },
-
-    chars: function(str) {
-      if (str == null) return [];
-      return String(str).split('');
-    },
-
-    swapCase: function(str) {
-      if (str == null) return '';
-      return String(str).replace(/\S/g, function(c){
-        return c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase();
-      });
-    },
-
-    escapeHTML: function(str) {
-      if (str == null) return '';
-      return String(str).replace(/[&<>"']/g, function(m){ return '&' + reversedEscapeChars[m] + ';'; });
-    },
-
-    unescapeHTML: function(str) {
-      if (str == null) return '';
-      return String(str).replace(/\&([^;]+);/g, function(entity, entityCode){
-        var match;
-
-        if (entityCode in escapeChars) {
-          return escapeChars[entityCode];
-        } else if (match = entityCode.match(/^#x([\da-fA-F]+)$/)) {
-          return String.fromCharCode(parseInt(match[1], 16));
-        } else if (match = entityCode.match(/^#(\d+)$/)) {
-          return String.fromCharCode(~~match[1]);
-        } else {
-          return entity;
-        }
-      });
-    },
-
-    escapeRegExp: function(str){
-      if (str == null) return '';
-      return String(str).replace(/([.*+?^=!:${}()|[\]\/\\])/g, '\\$1');
-    },
-
-    splice: function(str, i, howmany, substr){
-      var arr = _s.chars(str);
-      arr.splice(~~i, ~~howmany, substr);
-      return arr.join('');
-    },
-
-    insert: function(str, i, substr){
-      return _s.splice(str, i, 0, substr);
-    },
-
-    include: function(str, needle){
-      if (needle === '') return true;
-      if (str == null) return false;
-      return String(str).indexOf(needle) !== -1;
-    },
-
-    join: function() {
-      var args = slice.call(arguments),
-        separator = args.shift();
-
-      if (separator == null) separator = '';
-
-      return args.join(separator);
-    },
-
-    lines: function(str) {
-      if (str == null) return [];
-      return String(str).split("\n");
-    },
-
-    reverse: function(str){
-      return _s.chars(str).reverse().join('');
-    },
-
-    startsWith: function(str, starts){
-      if (starts === '') return true;
-      if (str == null || starts == null) return false;
-      str = String(str); starts = String(starts);
-      return str.length >= starts.length && str.slice(0, starts.length) === starts;
-    },
-
-    endsWith: function(str, ends){
-      if (ends === '') return true;
-      if (str == null || ends == null) return false;
-      str = String(str); ends = String(ends);
-      return str.length >= ends.length && str.slice(str.length - ends.length) === ends;
-    },
-
-    succ: function(str){
-      if (str == null) return '';
-      str = String(str);
-      return str.slice(0, -1) + String.fromCharCode(str.charCodeAt(str.length-1) + 1);
-    },
-
-    titleize: function(str){
-      if (str == null) return '';
-      str  = String(str).toLowerCase();
-      return str.replace(/(?:^|\s|-)\S/g, function(c){ return c.toUpperCase(); });
-    },
-
-    camelize: function(str){
-      return _s.trim(str).replace(/[-_\s]+(.)?/g, function(match, c){ return c ? c.toUpperCase() : ""; });
-    },
-
-    underscored: function(str){
-      return _s.trim(str).replace(/([a-z\d])([A-Z]+)/g, '$1_$2').replace(/[-\s]+/g, '_').toLowerCase();
-    },
-
-    dasherize: function(str){
-      return _s.trim(str).replace(/([A-Z])/g, '-$1').replace(/[-_\s]+/g, '-').toLowerCase();
-    },
-
-    classify: function(str){
-      return _s.titleize(String(str).replace(/[\W_]/g, ' ')).replace(/\s/g, '');
-    },
-
-    humanize: function(str){
-      return _s.capitalize(_s.underscored(str).replace(/_id$/,'').replace(/_/g, ' '));
-    },
-
-    trim: function(str, characters){
-      if (str == null) return '';
-      if (!characters && nativeTrim) return nativeTrim.call(str);
-      characters = defaultToWhiteSpace(characters);
-      return String(str).replace(new RegExp('\^' + characters + '+|' + characters + '+$', 'g'), '');
-    },
-
-    ltrim: function(str, characters){
-      if (str == null) return '';
-      if (!characters && nativeTrimLeft) return nativeTrimLeft.call(str);
-      characters = defaultToWhiteSpace(characters);
-      return String(str).replace(new RegExp('^' + characters + '+'), '');
-    },
-
-    rtrim: function(str, characters){
-      if (str == null) return '';
-      if (!characters && nativeTrimRight) return nativeTrimRight.call(str);
-      characters = defaultToWhiteSpace(characters);
-      return String(str).replace(new RegExp(characters + '+$'), '');
-    },
-
-    truncate: function(str, length, truncateStr){
-      if (str == null) return '';
-      str = String(str); truncateStr = truncateStr || '...';
-      length = ~~length;
-      return str.length > length ? str.slice(0, length) + truncateStr : str;
-    },
-
-    /**
-     * _s.prune: a more elegant version of truncate
-     * prune extra chars, never leaving a half-chopped word.
-     * @author github.com/rwz
-     */
-    prune: function(str, length, pruneStr){
-      if (str == null) return '';
-
-      str = String(str); length = ~~length;
-      pruneStr = pruneStr != null ? String(pruneStr) : '...';
-
-      if (str.length <= length) return str;
-
-      var tmpl = function(c){ return c.toUpperCase() !== c.toLowerCase() ? 'A' : ' '; },
-        template = str.slice(0, length+1).replace(/.(?=\W*\w*$)/g, tmpl); // 'Hello, world' -> 'HellAA AAAAA'
-
-      if (template.slice(template.length-2).match(/\w\w/))
-        template = template.replace(/\s*\S+$/, '');
-      else
-        template = _s.rtrim(template.slice(0, template.length-1));
-
-      return (template+pruneStr).length > str.length ? str : str.slice(0, template.length)+pruneStr;
-    },
-
-    words: function(str, delimiter) {
-      if (_s.isBlank(str)) return [];
-      return _s.trim(str, delimiter).split(delimiter || /\s+/);
-    },
-
-    pad: function(str, length, padStr, type) {
-      str = str == null ? '' : String(str);
-      length = ~~length;
-
-      var padlen  = 0;
-
-      if (!padStr)
-        padStr = ' ';
-      else if (padStr.length > 1)
-        padStr = padStr.charAt(0);
-
-      switch(type) {
-        case 'right':
-          padlen = length - str.length;
-          return str + strRepeat(padStr, padlen);
-        case 'both':
-          padlen = length - str.length;
-          return strRepeat(padStr, Math.ceil(padlen/2)) + str
-                  + strRepeat(padStr, Math.floor(padlen/2));
-        default: // 'left'
-          padlen = length - str.length;
-          return strRepeat(padStr, padlen) + str;
-        }
-    },
-
-    lpad: function(str, length, padStr) {
-      return _s.pad(str, length, padStr);
-    },
-
-    rpad: function(str, length, padStr) {
-      return _s.pad(str, length, padStr, 'right');
-    },
-
-    lrpad: function(str, length, padStr) {
-      return _s.pad(str, length, padStr, 'both');
-    },
-
-    sprintf: sprintf,
-
-    vsprintf: function(fmt, argv){
-      argv.unshift(fmt);
-      return sprintf.apply(null, argv);
-    },
-
-    toNumber: function(str, decimals) {
-      if (!str) return 0;
-      str = _s.trim(str);
-      if (!str.match(/^-?\d+(?:\.\d+)?$/)) return NaN;
-      return parseNumber(parseNumber(str).toFixed(~~decimals));
-    },
-
-    numberFormat : function(number, dec, dsep, tsep) {
-      if (isNaN(number) || number == null) return '';
-
-      number = number.toFixed(~~dec);
-      tsep = typeof tsep == 'string' ? tsep : ',';
-
-      var parts = number.split('.'), fnums = parts[0],
-        decimals = parts[1] ? (dsep || '.') + parts[1] : '';
-
-      return fnums.replace(/(\d)(?=(?:\d{3})+$)/g, '$1' + tsep) + decimals;
-    },
-
-    strRight: function(str, sep){
-      if (str == null) return '';
-      str = String(str); sep = sep != null ? String(sep) : sep;
-      var pos = !sep ? -1 : str.indexOf(sep);
-      return ~pos ? str.slice(pos+sep.length, str.length) : str;
-    },
-
-    strRightBack: function(str, sep){
-      if (str == null) return '';
-      str = String(str); sep = sep != null ? String(sep) : sep;
-      var pos = !sep ? -1 : str.lastIndexOf(sep);
-      return ~pos ? str.slice(pos+sep.length, str.length) : str;
-    },
-
-    strLeft: function(str, sep){
-      if (str == null) return '';
-      str = String(str); sep = sep != null ? String(sep) : sep;
-      var pos = !sep ? -1 : str.indexOf(sep);
-      return ~pos ? str.slice(0, pos) : str;
-    },
-
-    strLeftBack: function(str, sep){
-      if (str == null) return '';
-      str += ''; sep = sep != null ? ''+sep : sep;
-      var pos = str.lastIndexOf(sep);
-      return ~pos ? str.slice(0, pos) : str;
-    },
-
-    toSentence: function(array, separator, lastSeparator, serial) {
-      separator = separator || ', ';
-      lastSeparator = lastSeparator || ' and ';
-      var a = array.slice(), lastMember = a.pop();
-
-      if (array.length > 2 && serial) lastSeparator = _s.rtrim(separator) + lastSeparator;
-
-      return a.length ? a.join(separator) + lastSeparator + lastMember : lastMember;
-    },
-
-    toSentenceSerial: function() {
-      var args = slice.call(arguments);
-      args[3] = true;
-      return _s.toSentence.apply(_s, args);
-    },
-
-    slugify: function(str) {
-      if (str == null) return '';
-
-      var from  = "ąàáäâãåæăćęèéëêìíïîłńòóöôõøśșțùúüûñçżź",
-          to    = "aaaaaaaaaceeeeeiiiilnoooooosstuuuunczz",
-          regex = new RegExp(defaultToWhiteSpace(from), 'g');
-
-      str = String(str).toLowerCase().replace(regex, function(c){
-        var index = from.indexOf(c);
-        return to.charAt(index) || '-';
-      });
-
-      return _s.dasherize(str.replace(/[^\w\s-]/g, ''));
-    },
-
-    surround: function(str, wrapper) {
-      return [wrapper, str, wrapper].join('');
-    },
-
-    quote: function(str, quoteChar) {
-      return _s.surround(str, quoteChar || '"');
-    },
-
-    unquote: function(str, quoteChar) {
-      quoteChar = quoteChar || '"';
-      if (str[0] === quoteChar && str[str.length-1] === quoteChar)
-        return str.slice(1,str.length-1);
-      else return str;
-    },
-
-    exports: function() {
-      var result = {};
-
-      for (var prop in this) {
-        if (!this.hasOwnProperty(prop) || prop.match(/^(?:include|contains|reverse)$/)) continue;
-        result[prop] = this[prop];
-      }
-
-      return result;
-    },
-
-    repeat: function(str, qty, separator){
-      if (str == null) return '';
-
-      qty = ~~qty;
-
-      // using faster implementation if separator is not needed;
-      if (separator == null) return strRepeat(String(str), qty);
-
-      // this one is about 300x slower in Google Chrome
-      for (var repeat = []; qty > 0; repeat[--qty] = str) {}
-      return repeat.join(separator);
-    },
-
-    naturalCmp: function(str1, str2){
-      if (str1 == str2) return 0;
-      if (!str1) return -1;
-      if (!str2) return 1;
-
-      var cmpRegex = /(\.\d+)|(\d+)|(\D+)/g,
-        tokens1 = String(str1).toLowerCase().match(cmpRegex),
-        tokens2 = String(str2).toLowerCase().match(cmpRegex),
-        count = Math.min(tokens1.length, tokens2.length);
-
-      for(var i = 0; i < count; i++) {
-        var a = tokens1[i], b = tokens2[i];
-
-        if (a !== b){
-          var num1 = parseInt(a, 10);
-          if (!isNaN(num1)){
-            var num2 = parseInt(b, 10);
-            if (!isNaN(num2) && num1 - num2)
-              return num1 - num2;
-          }
-          return a < b ? -1 : 1;
-        }
-      }
-
-      if (tokens1.length === tokens2.length)
-        return tokens1.length - tokens2.length;
-
-      return str1 < str2 ? -1 : 1;
-    },
-
-    levenshtein: function(str1, str2) {
-      if (str1 == null && str2 == null) return 0;
-      if (str1 == null) return String(str2).length;
-      if (str2 == null) return String(str1).length;
-
-      str1 = String(str1); str2 = String(str2);
-
-      var current = [], prev, value;
-
-      for (var i = 0; i <= str2.length; i++)
-        for (var j = 0; j <= str1.length; j++) {
-          if (i && j)
-            if (str1.charAt(j - 1) === str2.charAt(i - 1))
-              value = prev;
-            else
-              value = Math.min(current[j], current[j - 1], prev) + 1;
-          else
-            value = i + j;
-
-          prev = current[j];
-          current[j] = value;
-        }
-
-      return current.pop();
-    },
-
-    toBoolean: function(str, trueValues, falseValues) {
-      if (typeof str === "number") str = "" + str;
-      if (typeof str !== "string") return !!str;
-      str = _s.trim(str);
-      if (boolMatch(str, trueValues || ["true", "1"])) return true;
-      if (boolMatch(str, falseValues || ["false", "0"])) return false;
-    }
-  };
-
-  // Aliases
-
-  _s.strip    = _s.trim;
-  _s.lstrip   = _s.ltrim;
-  _s.rstrip   = _s.rtrim;
-  _s.center   = _s.lrpad;
-  _s.rjust    = _s.lpad;
-  _s.ljust    = _s.rpad;
-  _s.contains = _s.include;
-  _s.q        = _s.quote;
-  _s.toBool   = _s.toBoolean;
-
-  // Exporting
-
-  // CommonJS module is defined
-  if (typeof exports !== 'undefined') {
-    if (typeof module !== 'undefined' && module.exports)
-      module.exports = _s;
-
-    exports._s = _s;
-  }
-
-  // Register as a named module with AMD.
-  if (typeof define === 'function' && define.amd)
-    define('underscore.string', [], function(){ return _s; });
-
-
-  // Integrate with Underscore.js if defined
-  // or create our own underscore object.
-  root._ = root._ || {};
-  root._.string = root._.str = _s;
-}(this, String);
-
-},{}],24:[function(require,module,exports){
-module.exports=require(21)
 },{}]},{},[1])
 (1)
 });

@@ -248,23 +248,22 @@
   });
 
   describe("Model", function() {
-    var Asset;
-    Asset = void 0;
+    var Asset, _ref;
+    Asset = (function(_super) {
+      __extends(Asset, _super);
+
+      function Asset() {
+        _ref = Asset.__super__.constructor.apply(this, arguments);
+        return _ref;
+      }
+
+      Asset.key("name", String);
+
+      return Asset;
+
+    })(Ryggrad.Model);
     beforeEach(function() {
-      var _ref;
-      return Asset = (function(_super) {
-        __extends(Asset, _super);
-
-        function Asset() {
-          _ref = Asset.__super__.constructor.apply(this, arguments);
-          return _ref;
-        }
-
-        Asset.key("name", String);
-
-        return Asset;
-
-      })(Ryggrad.Model);
+      return Asset.destroyAll();
     });
     it("can create records", function() {
       var asset;
@@ -356,11 +355,11 @@
       Asset.destroyAll();
       return Asset.count().should.equal(0);
     });
-    /* 
+    /*
     # TODO
     */
 
-    /* 
+    /*
     # TODO
     */
 
