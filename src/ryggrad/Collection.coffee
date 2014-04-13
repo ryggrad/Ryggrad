@@ -20,7 +20,14 @@ class Collection extends Base
     @records.promise   = @promise
     @options = options
 
-    @storage = options.storage or new Ajax(@)
+    @model.storageOptions or= {}
+    
+    if options.storage
+      @storage = new options.storage(this, @model.storageOptions)
+    else if @model.storage
+      @storage = new @model.storage(this, @model.storageOptions)
+    else
+      @storage = new Ajax(this, @model.storageOptions)
 
   count: =>
     @records.length
@@ -35,52 +42,57 @@ class Collection extends Base
     if typeof id.getID is 'function'
       id = id.getID()
 
-    record = @syncFind(id)
-    record or= @baseSyncFind(id)
-
-    if record and not options.remote
-      record
+    if options.remote
+      @storage.find(id, options.remote)
     else
-      @storage.find(id, options)
+      record   = @syncFind(id)
+      record or= @baseSyncFind(id)
 
-  findBy: (callback, request) =>
+  findBy: (callback, request, options={}) =>
     if typeof callback is 'string'
       filter = (r) -> r.get(callback) is request
-      @syncFindBy(filter) or @storage.findBy(filter)
+
+      if options.remote
+        @storage.findBy(callback, request, options)
+      else
+        @syncFindBy(filter)
     else
       unless typeof callback is 'function'
         throw new Error('callback function required')
 
-      @syncFindBy(callback) or @storage.findBy(callback)
+      if options.remote
+        @storage.findBy(callback, options.remote)
+      else
+        @syncFindBy(callback)
 
   refresh: (options = {}) =>
     @reset()
-    @fetch(options)
+    @fetch(options) if options.remote
 
   all: (callback, options = {}) =>
     if typeof callback is 'object'
       options  = callback
-      callback = null
+      callback = options if typeof options is 'function'
 
     if @shouldPreload() or options.remote
-      result = @storage.all(options)
+      result = @storage.all(options.remote)
     else
       result = @records
 
-    @promise.done(callback) if callback
+    # @promise.done(callback) if callback
 
     result
 
   syncFindBy: (callback) =>
     @records.filter(callback)[0]
 
-  reset: =>
-    @remove(@records)
+  reset: (options={}) =>
+    @remove(@records, options)
 
     @ids  = {}
     @cids = {}
 
-    @trigger('reset',)
+    @trigger('reset', [])
     @trigger('observe', [])
 
   observe: (callback) =>
@@ -90,7 +102,7 @@ class Collection extends Base
     @off('observe', callback)
 
   fetch: (options = {}) =>
-    @storage.all(options).request
+    @storage.all(options.remote)
 
   each: (callback) =>
     @all().promise.done (records) =>
@@ -118,7 +130,7 @@ class Collection extends Base
   empty: =>
     @records.length is 0
 
-  add: (records) =>
+  add: (records, options={}) =>
     return unless records
 
     # If we're passed a unforfilled promise, then
@@ -164,7 +176,12 @@ class Collection extends Base
 
     @sort()
 
-    @storage.add(records)
+    
+    if options.remote
+      if options.isNew
+        @storage.add(records, options.remote)
+      else
+        @storage.save(records, options.remote)
 
     # Unless we're the model's base collection
     # also add the record to that
@@ -182,9 +199,7 @@ class Collection extends Base
       @add(record) if record and not @exists(record)
       record
 
-  remove: (records) =>
-    @storage.destroy(records)
-
+  remove: (records, options={}) =>
     unless $.isArray(records)
       records = [records]
 
@@ -199,6 +214,8 @@ class Collection extends Base
       # Lastly remove record
       index = @records.indexOf(record)
       @records.splice(index, 1)
+    
+    @storage.destroy(records, options.remote) if options.remote
 
   comparator: (a, b) ->
     if a > b
