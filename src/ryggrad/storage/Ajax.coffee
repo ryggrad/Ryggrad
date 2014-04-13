@@ -27,8 +27,14 @@ class Ajax extends Storage
         data:  record.toJSON()
         queue: true
         warn:  true
- 
-  ## 
+
+      @request.done (result) =>
+        if result.id and record.id isnt result.id
+          record.changeID(result.id)
+
+        record.set(result)
+        
+  ##
   # Read
   ##
   all: (options = {}) =>
@@ -38,9 +44,10 @@ class Ajax extends Storage
     @records.request = @request
     @records.promise = @promise = $.Deferred()
     @request.done (result) =>
-      @add(result)
+      @collection.add(result)
       @promise.resolve(@records)
-    @records
+
+    @request
 
   find: (id, options = {}) =>
     record         = new @model(id: id)
@@ -51,7 +58,7 @@ class Ajax extends Storage
     request.done (response) =>
       record.set(response)
       record.promise.resolve(record)
-      @add(record)
+      @collection.add(record)
 
     record
 
@@ -64,7 +71,7 @@ class Ajax extends Storage
     request.done (response) =>
       record.set(response)
       record.promise.resolve(record)
-      @add(record)
+      @collection.add(record)
 
     record
 
@@ -84,10 +91,10 @@ class Ajax extends Storage
         url:   record.uri()
         data:  record.toJSON()
         queue: true
-        warn:  true  
+        warn:  true
   ##
   # Delete
-  ## 
+  ##
   destroy: (records) ->
     unless $.isArray(records)
       records = [records]
@@ -95,7 +102,7 @@ class Ajax extends Storage
     for record in records
       @setRequest record.set $.ajax
         type:  "DELETE"
-        url:  record.uri(record.getID()) 
+        url:  record.uri(record.getID())
         queue: true
         warn:  true
 
