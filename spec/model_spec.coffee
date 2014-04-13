@@ -1,9 +1,9 @@
 describe "Model", ->
-  Asset = undefined
+  class Asset extends Ryggrad.Model
+    @key "name", String
 
   beforeEach ->
-    class Asset extends Ryggrad.Model
-      @key "name", String
+    Asset.destroyAll()
 
   it "can create records", ->
     asset = Asset.create name: "test.pdf"
@@ -47,20 +47,20 @@ describe "Model", ->
 
     asset.destroy()
     expect(Asset.exists(asset.id)).to.be.falsey
- 
+
   it "can select records", ->
     asset = Asset.create(name: "foo.pdf")
     selected = Asset.filter((rec) ->
       rec.name is "foo.pdf"
     )
     selected[0].name.should.equal asset.name
- 
+
   it "can return all records", ->
     asset1 = Asset.create(name: "test.pdf")
     asset2 = Asset.create(name: "foo.pdf")
-    Asset.all()[0].name.should.equal asset1.name 
+    Asset.all()[0].name.should.equal asset1.name
     Asset.all()[1].name.should.equal asset2.name
- 
+
   it "can destroy all records", ->
     Asset.create name: "foo.pdf"
     Asset.create name: "foo.pdf"
@@ -68,7 +68,7 @@ describe "Model", ->
     Asset.destroyAll()
     Asset.count().should.equal 0
 
-  ### 
+  ###
   # TODO
   ###
 
@@ -77,7 +77,7 @@ describe "Model", ->
   #   asset = new Asset(name: "Johnson me!")
   #   asset.toJSON().should.equal { id: 'c-0', name: 'Johnson me!' }
 
-  ### 
+  ###
   # TODO
   ###
 
@@ -94,7 +94,7 @@ describe "Model", ->
   # it "can validate", ->
   #   Asset.include validate: ->
   #     "Name required"  unless @name
-  # 
+  #
   #   Asset.create(name: "").should.be.false
   #   Asset.create(name: "Yo big dog").should.be.truthy
 
@@ -127,7 +127,7 @@ describe "Model", ->
  
     Asset.create
       name: "Bob"
-      id: 2  
+      id: 2
  
     Asset.all()[0].id.should.not.equal Asset.all()[1].id
  
@@ -136,15 +136,14 @@ describe "Model", ->
     while i < 12
       Asset.create name: "Bob"
       i++
-   
+ 
     Asset.count().should.equal 12
-  
+ 
   it "should handle more than 10 cIDs correctly", ->
     i = 0
-   
+ 
     while i < 12
       Asset.create name: "Bob", id: i
       i++
-   
-    Asset.count().should.equal 12
  
+    Asset.count().should.equal 12
