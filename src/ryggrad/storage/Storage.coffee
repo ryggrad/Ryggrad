@@ -1,8 +1,9 @@
 class Storage
-  constructor: (@collection) ->
-    @model   = @collection.model
-    @options = @collection.options
-    @records = @collection.records
+  constructor: (@collection, storageOptions) ->
+    @model    = @collection.model
+    @options  = @collection.options
+    @records  = @collection.records
+    @key_name = @model.pluralName()
     
   ##
   # Create
