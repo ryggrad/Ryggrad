@@ -52,6 +52,10 @@ class Model extends Base
   @url: (value) ->
     @url = (-> value) if value
     value or "/#{_.pluralize(@name.toLowerCase())}"
+    if @host
+       @host + "/" + value
+    else
+      value
 
   @pluralName: ->
     "#{_.pluralize(@name.toLowerCase())}"
@@ -220,7 +224,7 @@ class Model extends Base
 
     this
 
-  destroy: (options={}) -> 
+  destroy: (options={}) ->
     @constructor.destroy(@, options)
 
     @trigger 'destroy'
