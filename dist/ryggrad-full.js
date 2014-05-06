@@ -741,7 +741,12 @@ Model = (function(_super) {
         return value;
       });
     }
-    return value || ("/" + (_.pluralize(this.name.toLowerCase())));
+    value || ("/" + (_.pluralize(this.name.toLowerCase())));
+    if (this.host) {
+      return this.host + "/" + value;
+    } else {
+      return value;
+    }
   };
 
   Model.pluralName = function() {
