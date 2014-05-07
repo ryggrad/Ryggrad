@@ -1685,7 +1685,7 @@ Ajax = (function(_super) {
       _this.collection.add(result);
       return _this.promise.resolve(_this.records);
     });
-    return this.request;
+    return this.records;
   };
 
   Ajax.prototype.find = function(id, options) {
