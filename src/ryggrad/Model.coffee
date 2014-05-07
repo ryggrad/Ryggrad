@@ -51,11 +51,11 @@ class Model extends Base
 
   @url: (value) ->
     @url = (-> value) if value
-    value or "/#{_.pluralize(@name.toLowerCase())}"
+    path = value or "/#{_.pluralize(@name.toLowerCase())}"
     if @host
-       @host + "/" + value
+       @host + "/" + path
     else
-      value
+      path
 
   @pluralName: ->
     "#{_.pluralize(@name.toLowerCase())}"
