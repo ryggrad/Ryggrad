@@ -21,7 +21,7 @@ class Collection extends Base
     @options = options
 
     @model.storageOptions or= {}
-    
+
     if options.storage
       @storage = new options.storage(this, @model.storageOptions)
     else if @model.storage
@@ -78,8 +78,6 @@ class Collection extends Base
       result = @storage.all(options.remote)
     else
       result = @records
-
-    # @promise.done(callback) if callback
 
     result
 
@@ -176,7 +174,7 @@ class Collection extends Base
 
     @sort()
 
-    
+
     if options.remote
       if options.isNew
         @storage.add(records, options.remote)
@@ -214,7 +212,7 @@ class Collection extends Base
       # Lastly remove record
       index = @records.indexOf(record)
       @records.splice(index, 1)
-    
+
     @storage.destroy(records, options.remote) if options.remote
 
   comparator: (a, b) ->
