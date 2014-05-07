@@ -47,7 +47,7 @@ class Ajax extends Storage
       @collection.add(result)
       @promise.resolve(@records)
 
-    @request
+    @records
 
   find: (id, options = {}) =>
     record         = new @model(id: id)

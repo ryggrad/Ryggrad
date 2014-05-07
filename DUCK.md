@@ -2,10 +2,10 @@
 
 - [ ] swappable storage engines
 
-For swappable storage engines we just have something that implements 
+For swappable storage engines we just have something that implements
 create, read, update, delete
 
-Then inside each method at the end we pass off to the current storage engine. Which is set on the instance 
+Then inside each method at the end we pass off to the current storage engine. Which is set on the instance
 of the model and defaults to Ajax
 
 All the mehtods should take place on the Collection. The model is dumb and has no idea how to create, read, update, delete
@@ -19,7 +19,7 @@ Storage =
   ##
   add: (records) ->
 
-  ## 
+  ##
   # Read
   ##
   all: ->
@@ -30,10 +30,10 @@ Storage =
   # Update
   ##
   save: (records) ->
-  
+
   ##
   # Delete
-  ## 
+  ##
   destroy: (records) ->
 ```
 
