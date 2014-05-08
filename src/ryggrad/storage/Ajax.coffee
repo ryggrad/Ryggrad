@@ -31,7 +31,6 @@ class Ajax extends Storage
         warn:  true
 
       record.request = request
-      record.promise = $.Deferred()
 
       request.done (result) =>
         if result.id and record.id isnt result.id
@@ -39,7 +38,7 @@ class Ajax extends Storage
 
         record.set(result)
         record.promise.resolve(record)
-        
+
   ##
   # Read
   ##
@@ -48,10 +47,9 @@ class Ajax extends Storage
 
     @request = @allRequest.call(@model, @model, options.request)
     @records.request = @request
-    @records.promise = @promise = $.Deferred()
     @request.done (result) =>
       @collection.add(result)
-      @promise.resolve(@records)
+      @records.promise.resolve(@records)
 
     @records
 
@@ -59,7 +57,6 @@ class Ajax extends Storage
     record         = new @model(id: id)
     request        = @findRequest.call(@model, record, options.request)
     record.request = request
-    record.promise = $.Deferred()
 
     request.done (response) =>
       record.set(response)
@@ -72,7 +69,6 @@ class Ajax extends Storage
     record         = new @model
     request        = ajaxRequest.call(@model, record)
     record.request = request
-    record.promise = $.Deferred()
 
     request.done (response) =>
       record.set(response)
@@ -102,8 +98,6 @@ class Ajax extends Storage
         warn:  true
 
       record.request = request
-      record.promise = $.Deferred()
-
       request.done (response) =>
         record.set(response)
         record.promise.resolve(record)
@@ -115,7 +109,7 @@ class Ajax extends Storage
       type: 'GET'
       queue: true
       warn:  true
-    
+
     $.ajax $.extend(defaults, options)
 
   findRequest: (record, options = {}) =>

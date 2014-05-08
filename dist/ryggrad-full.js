@@ -1670,7 +1670,6 @@ Ajax = (function(_super) {
         warn: true
       });
       record.request = request;
-      record.promise = $.Deferred();
       _results.push(request.done(function(result) {
         if (result.id && record.id !== result.id) {
           record.changeID(result.id);
@@ -1692,10 +1691,9 @@ Ajax = (function(_super) {
     }
     this.request = this.allRequest.call(this.model, this.model, options.request);
     this.records.request = this.request;
-    this.records.promise = this.promise = $.Deferred();
     this.request.done(function(result) {
       _this.collection.add(result);
-      return _this.promise.resolve(_this.records);
+      return _this.records.promise.resolve(_this.records);
     });
     return this.records;
   };
@@ -1711,7 +1709,6 @@ Ajax = (function(_super) {
     });
     request = this.findRequest.call(this.model, record, options.request);
     record.request = request;
-    record.promise = $.Deferred();
     request.done(function(response) {
       record.set(response);
       record.promise.resolve(record);
@@ -1726,7 +1723,6 @@ Ajax = (function(_super) {
     record = new this.model;
     request = ajaxRequest.call(this.model, record);
     record.request = request;
-    record.promise = $.Deferred();
     request.done(function(response) {
       record.set(response);
       record.promise.resolve(record);
@@ -1758,7 +1754,6 @@ Ajax = (function(_super) {
         warn: true
       });
       record.request = request;
-      record.promise = $.Deferred();
       _results.push(request.done(function(response) {
         record.set(response);
         return record.promise.resolve(record);
