@@ -100,7 +100,7 @@ class Collection extends Base
     @off('observe', callback)
 
   fetch: (options = {}) =>
-    @storage.all(options.remote)
+    @storage.all(options)
 
   each: (callback) =>
     @all().promise.done (records) =>
@@ -168,13 +168,14 @@ class Collection extends Base
       @trigger('add', record)
 
       changes.push(
-        name: record.getCID(), type: 'new',
-        object: this, value: record
+        name: record.getCID(), 
+        type: 'new',
+        object: this, 
+        value: record
       )
 
     @sort()
-
-
+   
     if options.remote
       if options.isNew
         @storage.add(records, options.remote)

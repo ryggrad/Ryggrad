@@ -38,7 +38,7 @@ Ryggrad.version = "0.0.5";
 
 module.exports = Ryggrad;
 
-},{"./ryggrad/Base":3,"./ryggrad/Collection":4,"./ryggrad/Controller":5,"./ryggrad/Events":6,"./ryggrad/Model":7,"./ryggrad/Module":8,"./ryggrad/Route":9,"./ryggrad/Router":10,"./ryggrad/Util":11,"./ryggrad/jquery/ajax":12,"./ryggrad/jquery/extensions":13,"./ryggrad/storage/Local":15,"jquery":"EGybA7","space-pen":18}],3:[function(require,module,exports){
+},{"./ryggrad/Base":3,"./ryggrad/Collection":4,"./ryggrad/Controller":5,"./ryggrad/Events":6,"./ryggrad/Model":7,"./ryggrad/Module":8,"./ryggrad/Route":9,"./ryggrad/Router":10,"./ryggrad/Util":11,"./ryggrad/jquery/ajax":12,"./ryggrad/jquery/extensions":13,"./ryggrad/storage/Local":15,"jquery":"IfVDOB","space-pen":18}],3:[function(require,module,exports){
 var Base, Events, Module, _ref,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -244,7 +244,7 @@ Collection = (function(_super) {
     if (options == null) {
       options = {};
     }
-    return this.storage.all(options.remote);
+    return this.storage.all(options);
   };
 
   Collection.prototype.each = function(callback) {
@@ -742,11 +742,11 @@ Model = (function(_super) {
         return value;
       });
     }
-    path = value || ("/" + (_.pluralize(this.name.toLowerCase())));
+    path = value || this.pluralName();
     if (this.host) {
       return this.host + "/" + path;
     } else {
-      return path;
+      return "/" + path;
     }
   };
 
@@ -1160,7 +1160,7 @@ Model = (function(_super) {
 
 module.exports = Model;
 
-},{"./Base":3,"./Collection":4,"./storage/Ajax":14,"underscore":"g3eXzT","underscore.inflections":21}],8:[function(require,module,exports){
+},{"./Base":3,"./Collection":4,"./storage/Ajax":14,"underscore":"pRZqWN","underscore.inflections":21}],8:[function(require,module,exports){
 var Module, moduleKeywords,
   __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
   __slice = [].slice,
@@ -1613,8 +1613,8 @@ module.exports = function(window) {
   return $.extend($.fn.hasEvent);
 };
 
-},{"jquery":"EGybA7"}],14:[function(require,module,exports){
-var Ajax, Storage,
+},{"jquery":"IfVDOB"}],14:[function(require,module,exports){
+var $, Ajax, Storage,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1622,17 +1622,22 @@ var Ajax, Storage,
 
 Storage = require('./Storage');
 
+$ = jQuery;
+
 Ajax = (function(_super) {
   __extends(Ajax, _super);
 
   function Ajax() {
     var args;
     args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-    this.setRequest = __bind(this.setRequest, this);
     this.findRequest = __bind(this.findRequest, this);
     this.allRequest = __bind(this.allRequest, this);
+    this.destroy = __bind(this.destroy, this);
+    this.save = __bind(this.save, this);
+    this.findBy = __bind(this.findBy, this);
     this.find = __bind(this.find, this);
     this.all = __bind(this.all, this);
+    this.add = __bind(this.add, this);
     Ajax.__super__.constructor.apply(this, args);
     if ('all' in this.options) {
       this.allRequest = this.options.all;
@@ -1642,29 +1647,36 @@ Ajax = (function(_super) {
     }
   }
 
-  Ajax.prototype.add = function(records) {
-    var isNew, record, type, _i, _len, _results,
+  Ajax.prototype.add = function(records, options) {
+    var isNew, record, request, type, _i, _len, _results,
       _this = this;
+    if (options == null) {
+      options = {};
+    }
     if (!$.isArray(records)) {
       records = [records];
     }
     _results = [];
     for (_i = 0, _len = records.length; _i < _len; _i++) {
       record = records[_i];
-      isNew = record.isNew();
+      isNew = options.isNew;
+      isNew || (isNew = true);
       type = isNew ? 'POST' : 'PUT';
-      this.setRequest(record.set($.ajax({
+      request = $.ajax({
         type: type,
         url: record.uri(),
         data: record.toJSON(),
         queue: true,
         warn: true
-      })));
-      _results.push(this.request.done(function(result) {
+      });
+      record.request = request;
+      record.promise = $.Deferred();
+      _results.push(request.done(function(result) {
         if (result.id && record.id !== result.id) {
           record.changeID(result.id);
         }
-        return record.set(result);
+        record.set(result);
+        return record.promise.resolve(record);
       }));
     }
     return _results;
@@ -1697,7 +1709,7 @@ Ajax = (function(_super) {
     record = new this.model({
       id: id
     });
-    request = this.asyncFindRequest.call(this.model, record, options.request);
+    request = this.findRequest.call(this.model, record, options.request);
     record.request = request;
     record.promise = $.Deferred();
     request.done(function(response) {
@@ -1723,41 +1735,34 @@ Ajax = (function(_super) {
     return record;
   };
 
-  Ajax.prototype.save = function(records) {
-    var isNew, record, type, _i, _len, _results;
-    if (!$.isArray(records)) {
-      records = [records];
+  Ajax.prototype.save = function(records, options) {
+    if (options == null) {
+      options = {};
     }
-    _results = [];
-    for (_i = 0, _len = records.length; _i < _len; _i++) {
-      record = records[_i];
-      isNew = record.isNew();
-      type = isNew ? 'POST' : 'PUT';
-      _results.push(this.setRequest(record.set($.ajax({
-        type: type,
-        url: record.uri(),
-        data: record.toJSON(),
-        queue: true,
-        warn: true
-      }))));
-    }
-    return _results;
+    return this.add(records, options);
   };
 
   Ajax.prototype.destroy = function(records) {
-    var record, _i, _len, _results;
+    var record, request, _i, _len, _results,
+      _this = this;
     if (!$.isArray(records)) {
       records = [records];
     }
     _results = [];
     for (_i = 0, _len = records.length; _i < _len; _i++) {
       record = records[_i];
-      _results.push(this.setRequest(record.set($.ajax({
+      request = $.ajax({
         type: "DELETE",
         url: record.uri(record.getID()),
         queue: true,
         warn: true
-      }))));
+      });
+      record.request = request;
+      record.promise = $.Deferred();
+      _results.push(request.done(function(response) {
+        record.set(response);
+        return record.promise.resolve(record);
+      }));
     }
     return _results;
   };
@@ -1770,7 +1775,9 @@ Ajax = (function(_super) {
     defaults = {
       url: model.uri(),
       dataType: 'json',
-      type: 'GET'
+      type: 'GET',
+      queue: true,
+      warn: true
     };
     return $.ajax($.extend(defaults, options));
   };
@@ -1783,19 +1790,11 @@ Ajax = (function(_super) {
     defaults = {
       url: record.uri(),
       dataType: 'json',
-      type: 'GET'
+      type: 'GET',
+      queue: true,
+      warn: true
     };
     return $.ajax($.extend(defaults, options));
-  };
-
-  Ajax.prototype.setRequest = function(request) {
-    var _this = this;
-    this.request = request;
-    this.promise = $.Deferred();
-    this.request.done(function() {
-      return _this.promise.resolve(_this);
-    });
-    return this.request;
   };
 
   return Ajax;
@@ -2149,7 +2148,7 @@ module.exports = Storage;
 
 }).call(this);
 
-},{"jquery":"EGybA7","underscore-plus":19}],18:[function(require,module,exports){
+},{"jquery":"IfVDOB","underscore-plus":19}],18:[function(require,module,exports){
 (function() {
   var $, Builder, Events, SelfClosingTags, Tags, View, callAttachHook, exports, idCounter, jQuery, methodName, originalCleanData, _fn, _fn1, _i, _j, _len, _len1, _ref, _ref1,
     __hasProp = {}.hasOwnProperty,
@@ -2839,7 +2838,7 @@ module.exports = Storage;
 
 }).call(this);
 
-},{"tantamount":20,"underscore":"g3eXzT"}],20:[function(require,module,exports){
+},{"tantamount":20,"underscore":"pRZqWN"}],20:[function(require,module,exports){
 (function() {
   var isEqual, _, _isEqual;
 
@@ -2933,7 +2932,7 @@ module.exports = Storage;
 
 }).call(this);
 
-},{"underscore":"g3eXzT"}],21:[function(require,module,exports){
+},{"underscore":"pRZqWN"}],21:[function(require,module,exports){
 // Generated by CoffeeScript 1.6.3
 (function() {
   var Inflections, root, _,
@@ -3214,7 +3213,7 @@ module.exports = Storage;
 
 }).call(this);
 
-},{"underscore":"g3eXzT","underscore.string":22}],22:[function(require,module,exports){
+},{"underscore":"pRZqWN","underscore.string":22}],22:[function(require,module,exports){
 //  Underscore.string
 //  (c) 2010 Esa-Matti Suuronen <esa-matti aet suuronen dot org>
 //  Underscore.string is freely distributable under the terms of the MIT license.

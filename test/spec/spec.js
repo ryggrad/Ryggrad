@@ -2,6 +2,135 @@
   var __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
+  describe("Ryggrad.Ajax", function() {
+    var User, spy;
+    User = void 0;
+    spy = sinon.spy(jQuery, "ajax");
+    beforeEach(function() {
+      var _ref;
+      return User = (function(_super) {
+        __extends(User, _super);
+
+        function User() {
+          _ref = User.__super__.constructor.apply(this, arguments);
+          return _ref;
+        }
+
+        User.key("first", String);
+
+        User.key("last", String);
+
+        return User;
+
+      })(Ryggrad.Model);
+    });
+    afterEach(function() {
+      spy.reset();
+      return User.destroyAll();
+    });
+    it("can GET a collection on fetch", function() {
+      var ajaxArgs;
+      ajaxArgs = {
+        url: "/users",
+        dataType: "json",
+        type: "GET",
+        queue: true,
+        warn: true
+      };
+      User.fetch();
+      return spy.should.have.been.calledWith(ajaxArgs);
+    });
+    it("can GET a record on fetch", function() {
+      var ajaxArgs, user;
+      User.add([
+        {
+          first: "John",
+          last: "Williams",
+          id: "IDD"
+        }
+      ]);
+      user = User.all()[0];
+      ajaxArgs = {
+        url: "/users/IDD",
+        dataType: "json",
+        type: "GET",
+        queue: true,
+        warn: true
+      };
+      user.fetch();
+      return spy.should.have.been.calledWith(ajaxArgs);
+    });
+    it("should send POST on save", function() {
+      var ajaxArgs, user;
+      ajaxArgs = {
+        type: "POST",
+        url: "/users/IDD",
+        data: {
+          id: "IDD",
+          first: "Hans",
+          last: "Zimmer"
+        },
+        queue: true,
+        warn: true
+      };
+      user = User.create({
+        first: "Hans",
+        last: "Zimmer",
+        id: "IDD"
+      }, {
+        remote: true
+      });
+      return spy.should.have.been.calledWith(ajaxArgs);
+    });
+    it("should send PUT on update", function() {
+      var ajaxArgs, user;
+      user = User.create({
+        first: "John",
+        last: "Williams",
+        id: "IDD"
+      }, {
+        remote: true
+      });
+      spy.reset();
+      ajaxArgs = {
+        type: "POST",
+        url: "/users/IDD",
+        data: {
+          id: "IDD",
+          first: "John2",
+          last: "Williams2"
+        },
+        queue: true,
+        warn: true
+      };
+      user.save({
+        first: "John2",
+        last: "Williams2"
+      }, {
+        remote: true
+      });
+      return spy.should.have.been.calledWith(ajaxArgs);
+    });
+    return it("should send DELETE on destroy", function() {
+      var ajaxArgs, user;
+      user = User.create({
+        first: "John",
+        last: "Williams",
+        id: "IDD"
+      });
+      ajaxArgs = {
+        queue: true,
+        type: "DELETE",
+        url: "/users/IDD",
+        warn: true
+      };
+      user.destroy({
+        remote: true
+      });
+      return spy.should.have.been.calledWith(ajaxArgs);
+    });
+  });
+
   describe("Model Attribute Tracking", function() {
     var Cat, Puppy, spy;
     Puppy = void 0;
@@ -248,21 +377,25 @@
   });
 
   describe("Model", function() {
-    var Asset, _ref;
-    Asset = (function(_super) {
-      __extends(Asset, _super);
-
-      function Asset() {
-        _ref = Asset.__super__.constructor.apply(this, arguments);
-        return _ref;
-      }
-
-      Asset.key("name", String);
-
-      return Asset;
-
-    })(Ryggrad.Model);
+    var Asset;
+    Asset = void 0;
     beforeEach(function() {
+      var _ref;
+      return Asset = (function(_super) {
+        __extends(Asset, _super);
+
+        function Asset() {
+          _ref = Asset.__super__.constructor.apply(this, arguments);
+          return _ref;
+        }
+
+        Asset.key("name", String);
+
+        return Asset;
+
+      })(Ryggrad.Model);
+    });
+    afterEach(function() {
       return Asset.destroyAll();
     });
     it("can create records", function() {
@@ -419,7 +552,7 @@
       }
       return Asset.count().should.equal(12);
     });
-    return it("should handle more than 10 cIDs correctly", function() {
+    it("should handle more than 10 cIDs correctly", function() {
       var i;
       i = 0;
       while (i < 12) {
@@ -430,6 +563,29 @@
         i++;
       }
       return Asset.count().should.equal(12);
+    });
+    it("allows undeclared attributes", function() {
+      Asset.add([
+        {
+          id: "12345",
+          first: "Hans",
+          last: "Zimmer",
+          created_by: "spine_user",
+          created_at: "2013-07-14T14:00:00-04:00",
+          updated_at: "2013-07-14T14:00:00-04:00"
+        }
+      ]);
+      return Asset.all()[0].created_by.should.equal("spine_user");
+    });
+    return it("should have a url function", function() {
+      var asset;
+      Asset.url().should.be("/users");
+      Asset.url("search").should.be("/assets/search");
+      asset = new Asset({
+        id: 1
+      });
+      asset.url().should.be("/assets/1");
+      return asset.url("custom").should.be("/assets/1/custom");
     });
   });
 

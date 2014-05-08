@@ -1,8 +1,11 @@
 describe "Model", ->
-  class Asset extends Ryggrad.Model
-    @key "name", String
-
+  Asset = undefined
+  
   beforeEach ->
+    class Asset extends Ryggrad.Model
+      @key "name", String
+
+  afterEach ->
     Asset.destroyAll()
 
   it "can create records", ->
@@ -147,3 +150,22 @@ describe "Model", ->
       i++
  
     Asset.count().should.equal 12
+
+  it "allows undeclared attributes", ->
+    Asset.add [
+      id: "12345"
+      first: "Hans"
+      last: "Zimmer"
+      created_by: "spine_user"
+      created_at: "2013-07-14T14:00:00-04:00"
+      updated_at: "2013-07-14T14:00:00-04:00"
+    ]
+
+    Asset.all()[0].created_by.should.equal "spine_user"
+  
+  it "should have a url function", ->
+    Asset.url().should.be "/users"
+    Asset.url("search").should.be "/assets/search"
+    asset = new Asset(id: 1)
+    asset.url().should.be "/assets/1"
+    asset.url("custom").should.be "/assets/1/custom"

@@ -1,4 +1,5 @@
 Storage = require('./Storage')
+$       = jQuery
 
 class Ajax extends Storage
   constructor: (args...) ->
@@ -13,26 +14,31 @@ class Ajax extends Storage
   ##
   # Create
   ##
-  add: (records) ->
+  add: (records, options={}) =>
     unless $.isArray(records)
       records = [records]
 
     for record in records
-      isNew = record.isNew()
-      type = if isNew then 'POST' else 'PUT'
+      isNew = options.isNew
+      isNew or= true
+      type  = if isNew then 'POST' else 'PUT'
 
-      @setRequest record.set $.ajax
+      request = $.ajax
         type:  type
         url:   record.uri()
         data:  record.toJSON()
         queue: true
         warn:  true
 
-      @request.done (result) =>
+      record.request = request
+      record.promise = $.Deferred()
+
+      request.done (result) =>
         if result.id and record.id isnt result.id
           record.changeID(result.id)
 
         record.set(result)
+        record.promise.resolve(record)
         
   ##
   # Read
@@ -51,7 +57,7 @@ class Ajax extends Storage
 
   find: (id, options = {}) =>
     record         = new @model(id: id)
-    request        = @asyncFindRequest.call(@model, record, options.request)
+    request        = @findRequest.call(@model, record, options.request)
     record.request = request
     record.promise = $.Deferred()
 
@@ -62,7 +68,7 @@ class Ajax extends Storage
 
     record
 
-  findBy: (ajaxRequest) ->
+  findBy: (ajaxRequest) =>
     record         = new @model
     request        = ajaxRequest.call(@model, record)
     record.request = request
@@ -78,54 +84,48 @@ class Ajax extends Storage
   ##
   # Update
   ##
-  save: (records) ->
-    unless $.isArray(records)
-      records = [records]
+  save: (records, options={}) =>
+    @add(records, options)
 
-    for record in records
-      isNew = record.isNew()
-      type = if isNew then 'POST' else 'PUT'
-
-      @setRequest record.set $.ajax
-        type:  type
-        url:   record.uri()
-        data:  record.toJSON()
-        queue: true
-        warn:  true
   ##
   # Delete
   ##
-  destroy: (records) ->
+  destroy: (records) =>
     unless $.isArray(records)
       records = [records]
 
     for record in records
-      @setRequest record.set $.ajax
+      request = $.ajax
         type:  "DELETE"
         url:  record.uri(record.getID())
         queue: true
         warn:  true
+
+      record.request = request
+      record.promise = $.Deferred()
+
+      request.done (response) =>
+        record.set(response)
+        record.promise.resolve(record)
 
   allRequest: (model, options = {}) =>
     defaults =
       url: model.uri()
       dataType: 'json'
       type: 'GET'
-
-    $.ajax($.extend(defaults, options))
+      queue: true
+      warn:  true
+    
+    $.ajax $.extend(defaults, options)
 
   findRequest: (record, options = {}) =>
     defaults =
       url: record.uri()
       dataType: 'json'
       type: 'GET'
+      queue: true
+      warn:  true
 
-    $.ajax($.extend(defaults, options))
-
-  setRequest: (@request) =>
-    @promise = $.Deferred()
-    @request.done =>
-      @promise.resolve(this)
-    @request
+    $.ajax $.extend(defaults, options)
 
 module.exports = Ajax
