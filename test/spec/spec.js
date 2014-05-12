@@ -1,5 +1,6 @@
 (function() {
-  var __hasProp = {}.hasOwnProperty,
+  var users,
+    __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   describe("Ryggrad.Ajax", function() {
@@ -16,9 +17,7 @@
           return _ref;
         }
 
-        User.key("first", String);
-
-        User.key("last", String);
+        User.properties("first", "last");
 
         return User;
 
@@ -26,7 +25,7 @@
     });
     afterEach(function() {
       spy.reset();
-      return User.destroyAll();
+      return User.remove();
     });
     it("can GET a collection on fetch", function() {
       var ajaxArgs;
@@ -38,18 +37,16 @@
         warn: true
       };
       User.fetch();
+      spy.should.have.been.called;
       return spy.should.have.been.calledWith(ajaxArgs);
     });
     it("can GET a record on fetch", function() {
       var ajaxArgs, user;
-      User.add([
-        {
-          first: "John",
-          last: "Williams",
-          id: "IDD"
-        }
-      ]);
-      user = User.all()[0];
+      user = new User({
+        first: "John",
+        last: "Williams",
+        id: "IDD"
+      });
       ajaxArgs = {
         url: "/users/IDD",
         dataType: "json",
@@ -60,11 +57,12 @@
       user.fetch();
       return spy.should.have.been.calledWith(ajaxArgs);
     });
-    it("should send POST on save", function() {
+    it("should send POST on create", function() {
       var ajaxArgs, user;
       ajaxArgs = {
         type: "POST",
-        url: "/users/IDD",
+        url: "/users",
+        dataType: "json",
         data: {
           id: "IDD",
           first: "Hans",
@@ -77,28 +75,24 @@
         first: "Hans",
         last: "Zimmer",
         id: "IDD"
-      }, {
-        remote: true
       });
       return spy.should.have.been.calledWith(ajaxArgs);
     });
     it("should send PUT on update", function() {
       var ajaxArgs, user;
-      user = User.create({
+      user = new User({
         first: "John",
         last: "Williams",
         id: "IDD"
-      }, {
-        remote: true
       });
-      spy.reset();
       ajaxArgs = {
-        type: "POST",
+        type: "PUT",
         url: "/users/IDD",
+        dataType: "json",
         data: {
           id: "IDD",
-          first: "John2",
-          last: "Williams2"
+          first: "John",
+          last: "Williams"
         },
         queue: true,
         warn: true
@@ -106,98 +100,170 @@
       user.save({
         first: "John2",
         last: "Williams2"
-      }, {
-        remote: true
       });
       return spy.should.have.been.calledWith(ajaxArgs);
     });
     return it("should send DELETE on destroy", function() {
       var ajaxArgs, user;
-      user = User.create({
+      user = new User({
         first: "John",
         last: "Williams",
         id: "IDD"
       });
       ajaxArgs = {
+        dataType: "json",
         queue: true,
         type: "DELETE",
         url: "/users/IDD",
         warn: true
       };
-      user.destroy({
-        remote: true
-      });
+      user.destroy();
       return spy.should.have.been.calledWith(ajaxArgs);
     });
   });
 
-  describe("Model Attribute Tracking", function() {
-    var Cat, Puppy, spy;
-    Puppy = void 0;
-    Cat = void 0;
-    spy = void 0;
-    beforeEach(function() {
-      var _ref, _ref1;
-      Puppy = (function(_super) {
-        __extends(Puppy, _super);
+  users = [
+    {
+      first: "Bob",
+      last: "Frank"
+    }, {
+      first: "Bob2",
+      last: "Frank2"
+    }
+  ];
 
-        function Puppy() {
-          _ref = Puppy.__super__.constructor.apply(this, arguments);
+  $.mockjax({
+    responseTime: 1,
+    url: "/users",
+    type: "GET",
+    responseText: users
+  });
+
+  $.mockjax({
+    responseTime: 1,
+    type: "POST",
+    url: "/users",
+    responseText: {
+      cats: "dogs",
+      id: "bob"
+    }
+  });
+
+  $.mockjax({
+    responseTime: 1,
+    url: "/users/getty",
+    type: "GET",
+    responseText: {
+      id: "bob"
+    }
+  });
+
+  $.mockjax({
+    responseTime: 1,
+    url: "/users/getty",
+    type: "PUT",
+    responseText: {
+      id: "bob"
+    }
+  });
+
+  $.mockjax({
+    responseTime: 1,
+    url: "/users/getty",
+    type: "DELETE",
+    responseText: {
+      id: "bob"
+    }
+  });
+
+  $.mockjax({
+    responseTime: 1,
+    url: "/users",
+    type: "DELETE",
+    responseText: users
+  });
+
+  describe("Ryggrad.Ajax Remote", function() {
+    var User;
+    User = void 0;
+    beforeEach(function() {
+      var _ref;
+      return User = (function(_super) {
+        __extends(User, _super);
+
+        function User() {
+          _ref = User.__super__.constructor.apply(this, arguments);
           return _ref;
         }
 
-        Puppy.key("name", String);
+        User.properties("first", "last");
 
-        return Puppy;
-
-      })(Ryggrad.Model);
-      Cat = (function(_super) {
-        __extends(Cat, _super);
-
-        function Cat() {
-          _ref1 = Cat.__super__.constructor.apply(this, arguments);
-          return _ref1;
-        }
-
-        Cat.key("name", Object);
-
-        return Cat;
+        return User;
 
       })(Ryggrad.Model);
-      return spy = sinon.spy();
     });
-    it('fires an update:name event when name is updated', function() {
-      var gus;
-      gus = Puppy.create({
-        name: 'gus'
-      });
-      gus.change('name', spy);
-      gus.updateAttribute('name', 'henry');
-      return spy.should.have.been.called;
+    ({
+      afterEach: function() {
+        return User.remove();
+      }
     });
-    it("doesn't fire an update:name event if the new name isn't different", function() {
-      var gus;
-      gus = new Puppy({
-        name: 'gus'
+    it("should create", function(done) {
+      return User.create().done(function() {
+        User.all()[0].cats.should.equal("dogs");
+        return done();
       });
-      gus.change('name', spy);
-      gus.updateAttribute('name', 'gus');
-      return spy.called.should.be["false"];
     });
-    return it("doesn't fire an event when an attribute is updated with an equivalent object", function() {
-      var henry;
-      henry = Cat.create({
-        name: {
-          first: 'Henry',
-          last: 'Lloyd'
-        }
+    it("should create and then change the id", function(done) {
+      return User.create().done(function() {
+        var user;
+        user = User.all()[0];
+        user.id.should.equal("bob");
+        User.records().ids[user.id].should.be.an.instanceOf(User);
+        return done();
       });
-      henry.change('name', spy);
-      henry.updateAttribute('name', {
-        first: 'Henry',
-        last: "Lloyd"
+    });
+    it("should fetch all items", function(done) {
+      User.count().should.equal(0);
+      return User.fetch().done(function(resp) {
+        User.count().should.equal(2);
+        return done();
       });
-      return spy.called.should.be["false"];
+    });
+    it("should fetch a single item", function(done) {
+      var user;
+      user = new User({
+        id: "getty"
+      });
+      return user.fetch().done(function() {
+        user.id.should.equal("bob");
+        return done();
+      });
+    });
+    it("should update", function(done) {
+      var user;
+      user = new User({
+        id: "getty"
+      });
+      return user.save().done(function() {
+        user.id.should.equal("bob");
+        return done();
+      });
+    });
+    it("should delete", function(done) {
+      var user;
+      user = new User({
+        id: "getty"
+      });
+      return user.destroy().done(function() {
+        (1 + 1).should.equal(2);
+        return done();
+      });
+    });
+    return it("should delete all", function(done) {
+      return User.destroy().done(function() {
+        (1 + 1).should.equal(2);
+        return done();
+      });
     });
   });
 
@@ -389,37 +455,43 @@
           return _ref;
         }
 
-        Asset.key("name", String);
+        Asset.properties('name');
+
+        Asset.prototype.validate = function() {
+          if (!this.name) {
+            return "Name required";
+          }
+        };
 
         return Asset;
 
       })(Ryggrad.Model);
     });
     afterEach(function() {
-      return Asset.destroyAll();
+      return Asset.remove();
     });
     it("can create records", function() {
       var asset;
-      asset = Asset.create({
+      Asset.count().should.equal(0);
+      asset = new Asset({
         name: "test.pdf"
       });
       Asset.all()[0].id.should.equal(asset.id);
-      Asset.all()[0].cid.should.equal(asset.cid);
-      return Asset.all()[0].name.should.equal(asset.name);
+      Asset.all()[0].name.should.equal(asset.name);
+      return Asset.count().should.equal(1);
     });
     it("can update records", function() {
       var asset;
-      asset = Asset.create({
+      asset = new Asset({
         name: "test.pdf"
       });
       Asset.all()[0].name.should.equal("test.pdf");
       asset.name = "wem.pdf";
-      asset.save();
       return Asset.all()[0].name.should.equal("wem.pdf");
     });
     it("can destroy records", function() {
       var asset;
-      asset = Asset.create({
+      asset = new Asset({
         name: "test.pdf"
       });
       Asset.all()[0].id.should.equal(asset.id);
@@ -427,115 +499,98 @@
       return expect(Asset.all()[0]).to.be.undefined;
     });
     it("can find records", function() {
-      var asset;
-      asset = Asset.create({
+      var asset, asset_id;
+      asset = new Asset({
         name: "test.pdf",
         id: "asset2"
       });
-      Asset.find(asset.id).should.be["instanceof"](Asset);
-      Asset.exists(asset.id).should.be["true"];
+      Asset.findById(asset.id).should.be["instanceof"](Asset);
+      asset_id = asset.id;
       asset.destroy();
-      return Asset.exists(asset.id).should.be["false"];
+      return Asset.findById(asset_id).should.be.falsey;
     });
     it("can find records by attribute", function() {
       var asset, asset_found;
-      asset = Asset.create({
+      asset = new Asset({
         name: "cats.pdf"
       });
       asset_found = Asset.findBy("name", "cats.pdf");
-      asset_found.name.should.equal(asset.name);
-      return asset.destroy();
-    });
-    it("can check existence", function() {
-      var asset;
-      asset = Asset.create({
-        name: "test.pdf"
-      });
-      asset.exists().should.be.truthy;
-      Asset.exists(asset.id).should.be.truthy;
-      asset.destroy();
-      return expect(Asset.exists(asset.id)).to.be.falsey;
-    });
-    it("can select records", function() {
-      var asset, selected;
-      asset = Asset.create({
-        name: "foo.pdf"
-      });
-      selected = Asset.filter(function(rec) {
-        return rec.name === "foo.pdf";
-      });
-      return selected[0].name.should.equal(asset.name);
+      return asset_found.name.should.equal(asset.name);
     });
     it("can return all records", function() {
       var asset1, asset2;
-      asset1 = Asset.create({
+      asset1 = new Asset({
         name: "test.pdf"
       });
-      asset2 = Asset.create({
+      asset2 = new Asset({
         name: "foo.pdf"
       });
       Asset.all()[0].name.should.equal(asset1.name);
       return Asset.all()[1].name.should.equal(asset2.name);
     });
     it("can destroy all records", function() {
-      Asset.create({
-        name: "foo.pdf"
+      new Asset({
+        name: "foo1.pdf"
       });
-      Asset.create({
-        name: "foo.pdf"
+      new Asset({
+        name: "foo2.pdf"
       });
       Asset.count().should.equal(2);
-      Asset.destroyAll();
+      Asset.destroy();
       return Asset.count().should.equal(0);
     });
-    /*
-    # TODO
-    */
-
-    /*
-    # TODO
-    */
-
-    /*
-    # TODO
-    */
-
-    it("has attribute hash", function() {
+    it("can be serialized into JSON", function() {
       var asset;
       asset = new Asset({
-        name: "wazzzup!"
+        id: "cats",
+        name: "Johnson me!"
       });
-      return asset.attributes.name.should.equal("wazzzup!");
+      Asset.toJSON().should.deep.equal([
+        {
+          id: "cats",
+          name: "Johnson me!"
+        }
+      ]);
+      return asset.toJSON().should.deep.equal({
+        id: "cats",
+        name: "Johnson me!"
+      });
+    });
+    it("can validate", function() {
+      var badConstruct;
+      badConstruct = function() {
+        return new Asset();
+      };
+      return badConstruct.should["throw"](/Name required/);
     });
     it("clones are dynamic", function() {
       var asset, clone;
-      asset = Asset.create({
+      asset = new Asset({
         name: "hotel california"
       });
-      clone = Asset.find(asset.id);
+      clone = Asset.findById(asset.id);
       asset.name = "checkout anytime";
-      asset.save();
       return clone.name.should.equal("checkout anytime");
     });
     it("should be able to change ID", function() {
       var asset;
-      asset = Asset.create({
+      asset = new Asset({
         name: "hotel california"
       });
       asset.id.should.not.be(null);
-      asset.id = "foo";
+      asset.changeID("foo");
       asset.id.should.equal("foo");
-      Asset.exists("foo").should.be.truthy;
-      asset.id = "cat";
+      Asset.findById("foo").should.be.truthy;
+      asset.changeID("cat");
       asset.id.should.equal("cat");
-      return Asset.exists("cat").should.be.truthy;
+      return Asset.findById("cat").should.be.truthy;
     });
-    it("should generate unique cIDs", function() {
-      Asset.create({
+    it("should generate unique IDs", function() {
+      new Asset({
         name: "Bob",
         id: 3
       });
-      Asset.create({
+      new Asset({
         name: "Bob",
         id: 2
       });
@@ -545,18 +600,18 @@
       var i;
       i = 0;
       while (i < 12) {
-        Asset.create({
+        new Asset({
           name: "Bob"
         });
         i++;
       }
       return Asset.count().should.equal(12);
     });
-    it("should handle more than 10 cIDs correctly", function() {
+    it("should handle more than 10 IDs correctly", function() {
       var i;
       i = 0;
       while (i < 12) {
-        Asset.create({
+        new Asset({
           name: "Bob",
           id: i
         });
@@ -564,24 +619,12 @@
       }
       return Asset.count().should.equal(12);
     });
-    it("allows undeclared attributes", function() {
-      Asset.add([
-        {
-          id: "12345",
-          first: "Hans",
-          last: "Zimmer",
-          created_by: "spine_user",
-          created_at: "2013-07-14T14:00:00-04:00",
-          updated_at: "2013-07-14T14:00:00-04:00"
-        }
-      ]);
-      return Asset.all()[0].created_by.should.equal("spine_user");
-    });
     return it("should have a url function", function() {
       var asset;
       Asset.url().should.be("/users");
       Asset.url("search").should.be("/assets/search");
       asset = new Asset({
+        name: "Bob",
         id: 1
       });
       asset.url().should.be("/assets/1");
