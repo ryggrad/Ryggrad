@@ -13,7 +13,6 @@ Ryggrad.Controller   = require('./ryggrad/Controller')
 Ryggrad.Route        = require('./ryggrad/Route') 
 Ryggrad.Router       = require('./ryggrad/Router') 
 Ryggrad.Util         = require('./ryggrad/Util') 
-Ryggrad.LocalStorage = require('./ryggrad/storage/Local') 
 
 # Exports
 Ryggrad.version = "0.0.5"
