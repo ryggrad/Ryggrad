@@ -4,47 +4,46 @@ describe "Ryggrad.Ajax", ->
 
   beforeEach ->
     class User extends Ryggrad.Model
-      @key "first", String
-      @key "last",  String
+      @properties "first", "last"
 
   afterEach ->
     spy.reset()
-    User.destroyAll()
+    User.remove()
 
   it "can GET a collection on fetch", ->
-    ajaxArgs = 
-      url: "/users", 
-      dataType: "json", 
-      type: "GET", 
-      queue: true, 
+    ajaxArgs =
+      url: "/users",
+      dataType: "json",
+      type: "GET",
+      queue: true,
       warn: true
-  
+
     User.fetch()
+    spy.should.have.been.called
     spy.should.have.been.calledWith(ajaxArgs)
 
   it "can GET a record on fetch", ->
-    User.add [
+    user = new User
       first: "John"
       last: "Williams"
       id: "IDD"
-    ]
-  
-    user = User.all()[0]
+ 
     ajaxArgs =
       url: "/users/IDD"
       dataType: "json"
       type: "GET"
-      queue: true, 
+      queue: true,
       warn: true
-  
+ 
     user.fetch()
-
+ 
     spy.should.have.been.calledWith(ajaxArgs)
  
-  it "should send POST on save", ->
-    ajaxArgs = 
-      type: "POST", 
-      url: "/users/IDD"
+  it "should send POST on create", ->
+    ajaxArgs =
+      type: "POST",
+      url: "/users"
+      dataType: "json"
       data:
         id: "IDD"
         first: "Hans"
@@ -56,50 +55,45 @@ describe "Ryggrad.Ajax", ->
       first: "Hans"
       last: "Zimmer"
       id: "IDD"
-    , remote: true
     
-
     spy.should.have.been.calledWith(ajaxArgs)
 
   it "should send PUT on update", ->
-    user = User.create
+    user = new User
       first: "John"
       last: "Williams"
       id: "IDD"
-    , remote: true
 
-    spy.reset()
- 
-    ajaxArgs = 
-      type: "POST"
+    ajaxArgs =
+      type: "PUT"
       url: "/users/IDD"
-      data: 
+      dataType: "json"
+      data:
         id: "IDD"
-        first: "John2" 
-        last: "Williams2"
+        first: "John"
+        last: "Williams"
       queue: true
       warn: true
 
     user.save
       first: "John2"
       last: "Williams2"
-    , remote: true
 
     spy.should.have.been.calledWith(ajaxArgs)
 
   it "should send DELETE on destroy", ->
-    user = User.create
+    user = new User
       first: "John"
       last: "Williams"
       id: "IDD"
 
-    ajaxArgs = 
+    ajaxArgs =
+      dataType: "json"
       queue: true
       type: "DELETE"
       url: "/users/IDD"
       warn: true
 
-    user.destroy remote: true
+    user.destroy()
 
     spy.should.have.been.calledWith(ajaxArgs)
-  
