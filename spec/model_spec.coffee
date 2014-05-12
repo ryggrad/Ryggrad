@@ -3,169 +3,122 @@ describe "Model", ->
   
   beforeEach ->
     class Asset extends Ryggrad.Model
-      @key "name", String
+      @properties 'name'
+
+      validate: ->
+        "Name required" unless @name
 
   afterEach ->
-    Asset.destroyAll()
+    Asset.remove()
 
   it "can create records", ->
-    asset = Asset.create name: "test.pdf"
+    Asset.count().should.equal 0
+    asset = new Asset name: "test.pdf"
 
     # Compare this way because JS is annoying
     Asset.all()[0].id.should.equal asset.id
-    Asset.all()[0].cid.should.equal asset.cid
     Asset.all()[0].name.should.equal asset.name
 
+    Asset.count().should.equal 1
+
   it "can update records", ->
-    asset = Asset.create(name: "test.pdf")
+    asset = new Asset name: "test.pdf"
     Asset.all()[0].name.should.equal "test.pdf"
+
     asset.name = "wem.pdf"
-    asset.save()
     Asset.all()[0].name.should.equal "wem.pdf"
 
   it "can destroy records", ->
-    asset = Asset.create(name: "test.pdf")
+    asset = new Asset name: "test.pdf"
     Asset.all()[0].id.should.equal asset.id
     asset.destroy()
     expect(Asset.all()[0]).to.be.undefined
 
   it "can find records", ->
-    asset = Asset.create(name: "test.pdf", id: "asset2")
-    Asset.find(asset.id).should.be.instanceof Asset
-    Asset.exists(asset.id).should.be.true
-
+    asset = new Asset name: "test.pdf", id: "asset2"
+    Asset.findById(asset.id).should.be.instanceof Asset
+    
+    asset_id = asset.id
     asset.destroy()
-    Asset.exists(asset.id).should.be.false
+    Asset.findById(asset_id).should.be.falsey
 
   it "can find records by attribute", ->
-    asset = Asset.create name: "cats.pdf"
+    asset = new Asset name: "cats.pdf"
     asset_found = Asset.findBy("name", "cats.pdf")
     asset_found.name.should.equal asset.name
-    asset.destroy()
-
-  it "can check existence", ->
-    asset = Asset.create name: "test.pdf"
-    asset.exists().should.be.truthy
-    Asset.exists(asset.id).should.be.truthy
-
-    asset.destroy()
-    expect(Asset.exists(asset.id)).to.be.falsey
-
-  it "can select records", ->
-    asset = Asset.create(name: "foo.pdf")
-    selected = Asset.filter((rec) ->
-      rec.name is "foo.pdf"
-    )
-    selected[0].name.should.equal asset.name
 
   it "can return all records", ->
-    asset1 = Asset.create(name: "test.pdf")
-    asset2 = Asset.create(name: "foo.pdf")
+    asset1 = new Asset(name: "test.pdf")
+    asset2 = new Asset(name: "foo.pdf")
     Asset.all()[0].name.should.equal asset1.name
     Asset.all()[1].name.should.equal asset2.name
 
   it "can destroy all records", ->
-    Asset.create name: "foo.pdf"
-    Asset.create name: "foo.pdf"
+    new Asset name: "foo1.pdf"
+    new Asset name: "foo2.pdf"
     Asset.count().should.equal 2
-    Asset.destroyAll()
+    Asset.destroy()
     Asset.count().should.equal 0
 
-  ###
-  # TODO
-  ###
+  it "can be serialized into JSON", ->
+    asset = new Asset id: "cats", name: "Johnson me!"
+    Asset.toJSON().should.deep.equal [{id: "cats", name: "Johnson me!"}]
+    asset.toJSON().should.deep.equal {id: "cats", name: "Johnson me!"}
 
-  # TODO fix this test
-  # it "can be serialized into JSON", ->
-  #   asset = new Asset(name: "Johnson me!")
-  #   asset.toJSON().should.equal { id: 'c-0', name: 'Johnson me!' }
+  it "can validate", ->
+    badConstruct = ->
+      new Asset()
+    
+    badConstruct.should.throw(/Name required/)
 
-  ###
-  # TODO
-  ###
-
-  # it "can be deserialized from JSON", ->
-  #   asset = Asset.fromJSON("{\"name\":\"Un-Johnson me!\"}")
-  #   asset.name.should.equal "Un-Johnson me!"
-  #   assets = Asset.fromJSON("[{\"name\":\"Un-Johnson me!\"}]")
-  #   assets[0] and assets[0].name.should.equal "Un-Johnson me!"
-
-  ###
-  # TODO
-  ###
-
-  # it "can validate", ->
-  #   Asset.include validate: ->
-  #     "Name required"  unless @name
-  #
-  #   Asset.create(name: "").should.be.false
-  #   Asset.create(name: "Yo big dog").should.be.truthy
-
-  it "has attribute hash", ->
-    asset = new Asset(name: "wazzzup!")
-    asset.attributes.name.should.equal "wazzzup!"
- 
   it "clones are dynamic", ->
-    asset = Asset.create name: "hotel california"
-    clone = Asset.find(asset.id)
+    asset = new Asset name: "hotel california"
+    clone = Asset.findById(asset.id)
     asset.name = "checkout anytime"
-    asset.save()
     clone.name.should.equal "checkout anytime"
- 
-  it "should be able to change ID", ->
-    asset = Asset.create name: "hotel california"
-    asset.id.should.not.be null
-    asset.id = "foo"
-    asset.id.should.equal "foo"
-    Asset.exists("foo").should.be.truthy
- 
-    asset.id = "cat"
-    asset.id.should.equal "cat"
-    Asset.exists("cat").should.be.truthy
- 
-  it "should generate unique cIDs", ->
-    Asset.create
+
+   it "should be able to change ID", ->
+     asset = new Asset name: "hotel california"
+     asset.id.should.not.be null
+     asset.changeID "foo"
+     asset.id.should.equal "foo"
+     Asset.findById("foo").should.be.truthy
+
+     asset.changeID "cat"
+     asset.id.should.equal "cat"
+     Asset.findById("cat").should.be.truthy
+
+  it "should generate unique IDs", ->
+    new Asset
       name: "Bob"
       id: 3
- 
-    Asset.create
+
+    new Asset
       name: "Bob"
       id: 2
- 
+
     Asset.all()[0].id.should.not.equal Asset.all()[1].id
+
+   it "should create multiple assets", ->
+     i = 0
+     while i < 12
+       new Asset name: "Bob"
+       i++
+
+     Asset.count().should.equal 12
  
-  it "should create multiple assets", ->
+  it "should handle more than 10 IDs correctly", ->
     i = 0
-    while i < 12
-      Asset.create name: "Bob"
-      i++
- 
-    Asset.count().should.equal 12
- 
-  it "should handle more than 10 cIDs correctly", ->
-    i = 0
  
     while i < 12
-      Asset.create name: "Bob", id: i
+      new Asset name: "Bob", id: i
       i++
  
     Asset.count().should.equal 12
 
-  it "allows undeclared attributes", ->
-    Asset.add [
-      id: "12345"
-      first: "Hans"
-      last: "Zimmer"
-      created_by: "spine_user"
-      created_at: "2013-07-14T14:00:00-04:00"
-      updated_at: "2013-07-14T14:00:00-04:00"
-    ]
-
-    Asset.all()[0].created_by.should.equal "spine_user"
-  
   it "should have a url function", ->
     Asset.url().should.be "/users"
     Asset.url("search").should.be "/assets/search"
-    asset = new Asset(id: 1)
+    asset = new Asset(name: "Bob", id: 1)
     asset.url().should.be "/assets/1"
     asset.url("custom").should.be "/assets/1/custom"
