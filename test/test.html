@@ -24,6 +24,7 @@
     <script src="../bower_components/sinon/lib/sinon.js" type="text/javascript" charset="utf-8"></script>
     <script src="../bower_components/sinon/lib/sinon/call.js" type="text/javascript" charset="utf-8"></script>
     <script src="../bower_components/sinon/lib/sinon/spy.js" type="text/javascript" charset="utf-8"></script>
+    <script src="../bower_components/jquery-mockjax/jquery.mockjax.js"></script>
     <script type="text/javascript" charset="utf-8">
       // Setup chai
       var expect = chai.expect;
@@ -35,7 +36,8 @@
 
     <!-- run mocha -->
     <script type="text/javascript" charset="utf-8">
-      mocha.run();
+      if (!('PHANTOMJS' in window))
+        mocha.run();
     </script>
 </body>
 </html>
