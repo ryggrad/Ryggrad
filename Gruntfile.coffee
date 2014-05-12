@@ -64,7 +64,7 @@ module.exports = (grunt) ->
       src:
         files: '<%= resources.src %>'
         tasks: ['coffee:src', 'uglify']
-    
+
     mocha:
       test:
         src: [ 'test/test.html' ],
@@ -82,8 +82,6 @@ module.exports = (grunt) ->
 
           # Override the timeout of the test (default is 5000)
           timeout: 10000
-          ui: "bdd"
-          ignoreLeaks: false
 
   grunt.loadNpmTasks 'grunt-contrib-coffee'
   grunt.loadNpmTasks 'grunt-contrib-uglify'
