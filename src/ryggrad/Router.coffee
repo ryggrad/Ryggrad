@@ -1,9 +1,7 @@
 Controller = require('./Controller')
-Module     = require('./Module')
 Route      = require('./Route')
-Base       = require('./Base')
 
-class Router extends Base
+class Router
   constructor: ->
     @path   = ''
     @routes = []

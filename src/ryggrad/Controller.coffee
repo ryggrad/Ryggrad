@@ -1,4 +1,3 @@
-Base   = require('./Base')
 Router = require("./Router")
 
 class Controller extends Base 
@@ -6,7 +5,7 @@ class Controller extends Base
   tag: 'div'
 
   constructor: (options) ->
-    @router = new Router()
+    @router  = new Router()
     @options = options
 
     for key, value of @options
